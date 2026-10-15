@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.1.0/verification-report.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.1.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.1.0. Binds only an implementation that says it uses this extension.",
+  "title": "Anchoring verification report",
+  "description": "What a verifier found for each independent timestamp and each checkpoint, as separate dimensions, each naming the source it was checked against, with the scope of its conclusion. There is deliberately no overall result: no assertion stands for another, and nothing here is a legal conclusion or a Conformance Level.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile",
+    "profile_version",
+    "trust_policy_ref",
+    "export_digest",
+    "export_entry_count",
+    "chain_id",
+    "timestamp_count",
+    "timestamps",
+    "checkpoint_count",
+    "checkpoints",
+    "scope_of_conclusion"
+  ],
+  "properties": {
+    "profile": {"const": "dps-anchoring-report"},
+    "profile_version": {"const": "0.1.0"},
+    "trust_policy_ref": {"type": "string", "minLength": 1, "description": "The trust policy the verifier configured independently of the export and the attachment."},
+    "attachment_digest": {"$ref": "#/$defs/sha256_hex", "description": "SHA-256 of the attachment's bytes as received."},
+    "export_digest": {"$ref": "#/$defs/sha256_hex", "description": "SHA-256 of the export's bytes as received."},
+    "export_entry_count": {"type": "integer", "minimum": 1},
+    "chain_id": {"type": "string", "minLength": 1, "description": "The chain the verifier checked, from its own configuration."},
+    "timestamp_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The number of timestamps in the attachment. The report has one result for each, and each timestamp_index from 0 to this count minus 1 appears once. JSON Schema cannot compare two documents: a reader holding both checks it."
+    },
+    "timestamps": {"type": "array", "items": {"$ref": "#/$defs/timestamp_result"}},
+    "checkpoint_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The number of checkpoints the verifier obtained or tried to obtain, each with one result."
+    },
+    "checkpoints": {"type": "array", "items": {"$ref": "#/$defs/checkpoint_result"}},
+    "scope_of_conclusion": {"$ref": "#/$defs/scope_of_conclusion"}
+  },
+  "if": {"properties": {"timestamp_count": {"minimum": 1}}, "required": ["timestamp_count"]},
+  "then": {"required": ["attachment_digest"]},
+  "$defs": {
+    "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ref": {"type": "string", "minLength": 1, "maxLength": 256},
+    "instant": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$"},
+    "stated_time": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"},
+    "status": {"enum": ["verified", "failed", "not_checked", "unavailable", "not_supported"]},
+    "findings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "findings": {"$ref": "#/$defs/findings"}
+      }
+    },
+    "timestamp_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp_index", "subject", "status", "tsa_ref", "checks", "issuer_time"],
+      "properties": {
+        "timestamp_index": {"type": "integer", "minimum": 0},
+        "subject": {
+          "description": "The subject as the attachment states it, without its value.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": {"enum": ["seal", "chain_link", "signature"]},
+            "decision_id": {"type": "string", "minLength": 1},
+            "chain_id": {"type": "string", "minLength": 1},
+            "sequence": {"type": "integer", "minimum": 0},
+            "of": {"type": "object"}
+          }
+        },
+        "status": {"$ref": "#/$defs/status", "description": "The timestamp as one dimension: verified only when every check below allows it."},
+        "tsa_ref": {"$ref": "#/$defs/ref", "description": "The authority the token was checked against."},
+        "reference_source": {"enum": ["trust_policy", "same_token"], "description": "Where the authority's certificate came from."},
+        "gen_time": {"$ref": "#/$defs/instant", "description": "The token's genTime."},
+        "existed_no_later_than": {"$ref": "#/$defs/instant", "description": "genTime plus the token's accuracy, if it states one: the time T by which the bytes existed."},
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["token", "message_imprint", "subject_bytes", "message_digest", "tsa_signature", "signer_certificate", "tsa_state"],
+          "properties": {
+            "token": {"$ref": "#/$defs/status", "description": "A TimeStampToken: CMS SignedData with one signer over a TSTInfo."},
+            "message_imprint": {"$ref": "#/$defs/status", "description": "SHA-256, and the SHA-256 of the subject's bytes."},
+            "subject_bytes": {"$ref": "#/$defs/status", "description": "The subject's bytes are the seal, link or signature value it names."},
+            "message_digest": {"$ref": "#/$defs/status", "description": "The signed messageDigest is the SHA-256 of the encapsulated TSTInfo, and the signed content type is id-ct-TSTInfo."},
+            "tsa_signature": {"$ref": "#/$defs/status", "description": "The signer the token names is the pinned certificate, and its signature over the signed attributes verifies with that certificate's key."},
+            "signer_certificate": {"$ref": "#/$defs/status", "description": "The ESSCertIDv2 certificate hash, when the token has one, is that of the pinned certificate."},
+            "tsa_state": {"$ref": "#/$defs/status", "description": "genTime within the policy's window for the authority, and before its revocation."}
+          }
+        },
+        "issuer_time": {"$ref": "#/$defs/issuer_time"},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {
+        "required": ["reference_source", "gen_time", "existed_no_later_than"],
+        "properties": {
+          "reference_source": {"const": "trust_policy"},
+          "checks": {
+            "properties": {
+              "token": {"const": "verified"},
+              "message_imprint": {"const": "verified"},
+              "subject_bytes": {"const": "verified"},
+              "message_digest": {"const": "verified"},
+              "tsa_signature": {"const": "verified"},
+              "signer_certificate": {"enum": ["verified", "not_checked"]},
+              "tsa_state": {"const": "verified"}
+            }
+          }
+        }
+      },
+      "else": {
+        "description": "No time is given for a timestamp that is not verified, and no issuer's time is compared with it.",
+        "not": {"anyOf": [{"required": ["gen_time"]}, {"required": ["existed_no_later_than"]}]},
+        "properties": {"issuer_time": {"properties": {"status": {"const": "not_checked"}}}}
+      }
+    },
+    "issuer_time": {
+      "description": "The issuer's own time for the subject (a record's affirmation_record.timestamp, or a checkpoint's checkpoint_time) compared with existed_no_later_than. inconsistent: the issuer's time is later. It is reported apart from the timestamp, which it does not change.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "stated": {"$ref": "#/$defs/stated_time"},
+        "stated_in": {"enum": ["affirmation_record.timestamp", "checkpoint_time"]},
+        "consistency": {"enum": ["consistent", "inconsistent"]},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"enum": ["verified", "failed"]}}, "required": ["status"]},
+          "then": {"required": ["stated", "stated_in", "consistency"]},
+          "else": {"not": {"required": ["consistency"]}}
+        },
+        {
+          "if": {"properties": {"consistency": {"const": "inconsistent"}}, "required": ["consistency"]},
+          "then": {"properties": {"status": {"const": "failed"}}}
+        },
+        {
+          "if": {"properties": {"consistency": {"const": "consistent"}}, "required": ["consistency"]},
+          "then": {"properties": {"status": {"const": "verified"}}}
+        }
+      ]
+    },
+    "checkpoint_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoint_index", "obtained_from", "status", "independence", "signature", "key_state", "comparison"],
+      "properties": {
+        "checkpoint_index": {"type": "integer", "minimum": 0},
+        "obtained_from": {
+          "enum": ["configured_source", "same_export"],
+          "description": "configured_source: obtained by the verifier, outside the export, from a source its trust policy configures. same_export: found in the export, so never independent."
+        },
+        "source_ref": {"$ref": "#/$defs/ref", "description": "The configured source it came from."},
+        "status": {"$ref": "#/$defs/status", "description": "The checkpoint as an independent checkpoint: verified only when independence, signature and key_state are verified."},
+        "checkpoint": {
+          "description": "The values as obtained.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "head_link"],
+          "properties": {
+            "chain_id": {"type": "string", "minLength": 1},
+            "count": {"type": "integer", "minimum": 1},
+            "head_link": {"$ref": "#/$defs/sha256_hex"},
+            "checkpoint_time": {"$ref": "#/$defs/instant"}
+          }
+        },
+        "independence": {"$ref": "#/$defs/check"},
+        "signature": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"$ref": "#/$defs/status"},
+            "key_ref": {"$ref": "#/$defs/ref"},
+            "reference_source": {"enum": ["trust_policy", "same_export"], "description": "Where the key came from."},
+            "findings": {"$ref": "#/$defs/findings"}
+          },
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {"required": ["key_ref", "reference_source"], "properties": {"reference_source": {"const": "trust_policy"}}}
+        },
+        "key_state": {"$ref": "#/$defs/key_state"},
+        "comparison": {
+          "description": "The export's entries against the checkpoint. Compared only with a verified checkpoint. Entries after count are not covered.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"$ref": "#/$defs/status"},
+            "covered_count": {"type": "integer", "minimum": 1},
+            "not_covered_indexes": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
+            "findings": {"$ref": "#/$defs/findings"}
+          },
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {"required": ["covered_count", "not_covered_indexes"]},
+          "else": {"not": {"anyOf": [{"required": ["covered_count"]}, {"required": ["not_covered_indexes"]}]}}
+        },
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"obtained_from": {"const": "configured_source"}}, "required": ["obtained_from"]},
+          "then": {"required": ["source_ref"]}
+        },
+        {
+          "description": "A checkpoint found in the export is never independent.",
+          "if": {"properties": {"obtained_from": {"const": "same_export"}}, "required": ["obtained_from"]},
+          "then": {
+            "properties": {
+              "status": {"const": "failed"},
+              "independence": {"properties": {"status": {"const": "failed"}}}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {
+            "required": ["checkpoint"],
+            "properties": {
+              "independence": {"properties": {"status": {"const": "verified"}}},
+              "signature": {"properties": {"status": {"const": "verified"}}},
+              "key_state": {"properties": {"status": {"const": "verified"}}}
+            }
+          },
+          "else": {"properties": {"comparison": {"properties": {"status": {"const": "not_checked"}}}}}
+        }
+      ]
+    },
+    "key_state": {
+      "description": "The key's state when the signature was made. time_basis says what that time rests on: stated_time is the signer's own statement, never independent time; independent_timestamp is a verified timestamp over the signature value.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "revocation_reason": {"enum": ["superseded", "compromised"]},
+        "time_basis": {"enum": ["stated_time", "independent_timestamp"]},
+        "time": {"$ref": "#/$defs/instant"},
+        "timestamp_index": {"type": "integer", "minimum": 0, "description": "The timestamp the time rests on."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {"required": ["key_ref", "time_basis", "time"]}
+        },
+        {
+          "if": {"properties": {"time_basis": {"const": "independent_timestamp"}}, "required": ["time_basis"]},
+          "then": {"required": ["timestamp_index"]},
+          "else": {"not": {"required": ["timestamp_index"]}}
+        },
+        {
+          "description": "After a compromise, only an independent timestamp earlier than revoked_at establishes the time.",
+          "if": {
+            "properties": {"status": {"const": "verified"}, "revocation_reason": {"const": "compromised"}},
+            "required": ["status", "revocation_reason"]
+          },
+          "then": {"properties": {"time_basis": {"const": "independent_timestamp"}}}
+        }
+      ]
+    },
+    "scope_of_conclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["covers", "not_assessed"],
+      "properties": {
+        "covers": {"const": "supplied_export_and_attachment_only"},
+        "not_assessed": {
+          "description": "Every one of these, always.",
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 7,
+          "items": {
+            "enum": [
+              "legal_requirements",
+              "conformance_level",
+              "truth_of_record_content",
+              "time_of_decision",
+              "earliest_existence",
+              "events_never_recorded",
+              "content_reviewed_by_witness"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
