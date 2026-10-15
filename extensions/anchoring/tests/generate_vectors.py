@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Writes vectors.json for the anchoring extension, version 0.1.0 (a proposal).
+"""Writes vectors.json for the anchoring extension, version 0.2.0 (a proposal).
 
 TEST KEYS ONLY. Every key below is derived from a published text, so anyone can recompute it. Never derive a real
 key this way, and never trust anything signed by one of these keys.
 
-  seed               SHA-256 of the UTF-8 text "dps-anchoring 0.1.0 test key " followed by the key's name
+  seed               SHA-256 of the UTF-8 text "dps-anchoring 0.1.0 test key " followed by the key's name (the text
+                     is unchanged in 0.2.0, so the keys are those of 0.1.0)
   Ed25519 (witness)  the seed is the private key (RFC 8032, section 5.1.5)
   ECDSA P-256 (TSA)  the private scalar is (the seed read as a big-endian integer) mod (n - 1), plus 1
 
@@ -13,7 +14,8 @@ the cryptography package (OpenSSL 3.2 or later). The RFC 3161 tokens are built w
 script therefore writes the same bytes, and run_checks.py checks that it does.
 
 Records R0 to R2 and their chain are those of the portable verification extension's cases. R1x is R1 with one
-changed word, re-sealed. R4 is a fourth synthetic record.
+changed word, re-sealed. R4 is a fourth synthetic record. CHAIN_ACCENTED is a chain identifier that is not ASCII, so
+that its length prefix (in UTF-8 bytes) differs from its number of characters.
 
 Usage:  python extensions/anchoring/tests/generate_vectors.py            write vectors.json
         python extensions/anchoring/tests/generate_vectors.py --check    exit 1 if vectors.json differs
@@ -37,9 +39,10 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE / "vectors.json"
 
-PROFILE, VERSION = "dps-anchoring", "0.1.0"
+PROFILE, VERSION = "dps-anchoring", "0.2.0"
 CHAIN = "urn:example:chain:issuer-1"
 CHAIN_2 = "urn:example:chain:issuer-2"
+CHAIN_ACCENTED = "cha\u00eene-\u00e9metteur-1"  # "chaîne-émetteur-1", precomposed: 17 characters, 19 UTF-8 bytes
 SEED_PREFIX = "dps-anchoring 0.1.0 test key "
 P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 TSA_POLICY_OID = "2.999.1"  # an OID under the arc reserved for examples
@@ -131,6 +134,16 @@ def lp(data):
 
 def signed_bytes(fields):
     return MAGIC + b"".join(lp(f) for f in fields)
+
+
+TEXT_FIELDS = (0, 1, 2, 3, 4, 7)  # the checkpoint's text fields, by position in its field order
+
+
+def signed_bytes_counting_characters(fields):
+    """A wrong encoder, to show what it gives (TEST ONLY): each text field's prefix counts its characters, not its
+    UTF-8 bytes. For ASCII text the two are the same."""
+    return MAGIC + b"".join((len(f.decode("utf-8")) if i in TEXT_FIELDS else len(f)).to_bytes(4, "big") + f
+                            for i, f in enumerate(fields))
 
 
 def checkpoint_fields(cp, profile=PROFILE, version=VERSION, assertion="checkpoint", key_ref=None):
@@ -231,8 +244,10 @@ def tsa_certificate(key, number, serial):
 
 def make_token(key, cert_der, imprint_of, gen_time, serial, *, hash_algorithm="sha256", accuracy_seconds=None,
                cert_id_of=None, with_cert_id=True, content_type="tst_info", signature_algorithm="sha256_ecdsa",
-               signers=1, hash_label=None, attr_content_type=None, sid_cert_der=None):
-    """An RFC 3161 TimeStampToken: CMS SignedData over a TSTInfo, signed with ECDSA P-256 and SHA-256 (RFC 6979)."""
+               signers=1, hash_label=None, attr_content_type=None, sid_cert_der=None, cert_id_hash="sha256",
+               cert_id_values=1, gen_time_text=None, accuracy_millis=None):
+    """An RFC 3161 TimeStampToken: CMS SignedData over a TSTInfo, signed with ECDSA P-256 and SHA-256 (RFC 6979).
+    gen_time_text, when given, is written as the genTime's exact characters (to make one that is not in UTC)."""
     cert = asn1_x509.Certificate.load(cert_der)
     sid_cert = asn1_x509.Certificate.load(sid_cert_der or cert_der)
     hashed = hashlib.new(hash_algorithm, imprint_of).digest()
@@ -241,18 +256,23 @@ def make_token(key, cert_der, imprint_of, gen_time, serial, *, hash_algorithm="s
         "policy": TSA_POLICY_OID,
         "message_imprint": {"hash_algorithm": {"algorithm": hash_label or hash_algorithm}, "hashed_message": hashed},
         "serial_number": serial,
-        "gen_time": gen_time,
+        "gen_time": gen_time if gen_time_text is None else core.GeneralizedTime.load(
+            b"\x18" + bytes([len(gen_time_text)]) + gen_time_text.encode("ascii")),
     }
-    if accuracy_seconds is not None:
-        info["accuracy"] = {"seconds": accuracy_seconds}
+    if accuracy_seconds is not None or accuracy_millis is not None:
+        info["accuracy"] = {k: x for k, x in (("seconds", accuracy_seconds), ("millis", accuracy_millis))
+                            if x is not None}
     econtent = tsp.TSTInfo(info).dump()
     attrs = [
         cms.CMSAttribute({"type": "content_type", "values": [attr_content_type or content_type]}),
         cms.CMSAttribute({"type": "message_digest", "values": [sha256(econtent)]}),
     ]
     if with_cert_id:
-        attrs.append(cms.CMSAttribute({"type": "signing_certificate_v2", "values": [
-            {"certs": [{"cert_hash": sha256(cert_id_of or cert_der)}]}]}))
+        cert_id = {"cert_hash": hashlib.new(cert_id_hash, cert_id_of or cert_der).digest()}
+        if cert_id_hash != "sha256":  # SHA-256 is the default, which DER leaves out
+            cert_id = {"hash_algorithm": {"algorithm": cert_id_hash}, **cert_id}
+        attrs.append(cms.CMSAttribute({"type": "signing_certificate_v2",
+                                       "values": [{"certs": [cert_id]}] * cert_id_values}))
     signed_attrs = cms.CMSAttributes(sorted(attrs, key=lambda a: a.dump()))  # DER: a SET OF is sorted
     signature = key.sign(signed_attrs.dump(), ec.ECDSA(hashes.SHA256(), deterministic_signing=True))
     signer = cms.SignerInfo({
@@ -287,13 +307,16 @@ def flip_last_byte(data):
 
 # ---------------------------------------------------------------- witness checkpoints
 
-def make_checkpoint(keys, key_name, chain_id, count, head_link, checkpoint_time, presented=None, signed_as=None):
+def make_checkpoint(keys, key_name, chain_id, count, head_link, checkpoint_time, presented=None, signed_as=None,
+                    counting_characters=False):
     """A checkpoint signed by a witness key. presented changes what the object says after signing; signed_as
-    changes what the key signed (another profile, version, assertion type or key reference)."""
+    changes what the key signed (another profile, version, assertion type or key reference); counting_characters
+    signs the bytes of an encoder whose length prefixes count characters instead of bytes."""
     cp = {"profile": PROFILE, "profile_version": VERSION, "assertion": "checkpoint", "chain_id": chain_id,
           "count": count, "head_link": head_link, "checkpoint_time": checkpoint_time,
           "signature": {"algorithm": "Ed25519", "key_ref": key_name}}
-    made_over = signed_bytes(checkpoint_fields(cp, **(signed_as or {})))
+    fields = checkpoint_fields(cp, **(signed_as or {}))
+    made_over = (signed_bytes_counting_characters if counting_characters else signed_bytes)(fields)
     cp["signature"]["value_b64"] = b64(keys[key_name].sign(made_over))
     for k, v in (presented or {}).items():
         if k in ("key_ref", "algorithm"):
@@ -347,12 +370,12 @@ def build():
     cp("cp_a_count_2", "witness-a-1, the first two entries", "witness-a-1", CHAIN, 2, "L1", "2026-09-26T12:00:00Z")
     cp("cp_a_count_4", "witness-a-1, the four entries of the extended export", "witness-a-1", CHAIN, 4, "L3",
        "2026-09-29T12:00:00Z")
-    cp("cp_a_moved_to_mirror", "cp_a's signature presented under witness-a-mirror, a second reference to the same "
+    cp("cp_a_moved_to_mirror", "cp_a's signature presented under witness-a-mirror, another reference to the same "
        "key", "witness-a-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z", presented={"key_ref": "witness-a-mirror"})
     cp("cp_a_other_profile", "the key signed the same fields under profile dps-portable-verification",
        "witness-a-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z", signed_as={"profile": "dps-portable-verification"})
-    cp("cp_a_other_version", "the key signed the same fields under profile_version 0.2.0", "witness-a-1", CHAIN, 3,
-       "L2", "2026-09-27T12:00:00Z", signed_as={"version": "0.2.0"})
+    cp("cp_a_other_version", "the key signed the same fields under profile_version 0.1.0, the earlier version",
+       "witness-a-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z", signed_as={"version": "0.1.0"})
     cp("cp_a_other_type", "the key signed the same fields under assertion type seal", "witness-a-1", CHAIN, 3, "L2",
        "2026-09-27T12:00:00Z", signed_as={"assertion": "seal"})
     cp("cp_a_count_changed", "signed with count 3, presented with count 2", "witness-a-1", CHAIN, 3, "L2",
@@ -379,6 +402,17 @@ def build():
     cp("cp_x", "witness-x-1, a key the policy does not list", "witness-x-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z")
     cp("cp_org", "issuer-seal-1, the issuer's own key (role organisation)", "issuer-seal-1", CHAIN, 3, "L2",
        "2026-09-27T12:00:00Z")
+    cp("cp_org_as_witness", "the issuer's own key, signing under issuer-witness-1, a second reference a policy may "
+       "give it", "issuer-seal-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z", presented={"key_ref": "issuer-witness-1"},
+       signed_as={"key_ref": "issuer-witness-1"})
+    cp("cp_a_feb30", "witness-a-1, correctly signed, stating 2026-02-30, a date that does not exist", "witness-a-1",
+       CHAIN, 3, "L2", "2026-02-30T12:00:00Z")
+    cp("cp_a_leap_second", "witness-a-1, correctly signed, stating a leap second", "witness-a-1", CHAIN, 3, "L2",
+       "2026-12-31T23:59:60Z")
+    cp("cp_accented", "witness-a-1, the three entries of the full export, for a chain identifier that is not ASCII",
+       "witness-a-1", CHAIN_ACCENTED, 3, "L2", "2026-09-27T12:00:00Z")
+    cp("cp_accented_char_count", "cp_accented, signed over bytes whose length prefixes count characters instead of "
+       "bytes", "witness-a-1", CHAIN_ACCENTED, 3, "L2", "2026-09-27T12:00:00Z", counting_characters=True)
     bad = copy.deepcopy(checkpoints["cp_a"])
     bad["about"] = "cp_a with the last byte of its signature changed"
     sig = base64.b64decode(bad["checkpoint"]["signature"]["value_b64"])
@@ -442,6 +476,20 @@ def build():
         "2026-09-25T11:05:00Z", 123, sid_cert_der=certs["tsa-example-2"])
     tok("seal_r0_two_signers", "TSA 1 over the seal of R0, with its SignerInfo given twice", r0, tsa1,
         "2026-09-25T11:05:00Z", 120, signers=2)
+    tok("seal_r0_cert_id_sha512", "TSA 1 over the seal of R0, its ESSCertIDv2 made with SHA-512", r0, tsa1,
+        "2026-09-25T11:05:00Z", 124, cert_id_hash="sha512")
+    tok("seal_r0_cert_id_no_value", "TSA 1 over the seal of R0, its signingCertificateV2 attribute with no value", r0,
+        tsa1, "2026-09-25T11:05:00Z", 125, cert_id_values=0)
+    tok("seal_r0_not_utc", "TSA 1 over the seal of R0, its genTime written with no time zone (20260925110500)", r0,
+        tsa1, "2026-09-25T11:05:00Z", 126, gen_time_text="20260925110500")
+    tok("seal_r0_accuracy_negative", "TSA 1 over the seal of R0, with an accuracy of -60 s", r0, tsa1,
+        "2026-09-25T11:05:00Z", 127, accuracy_seconds=-60)
+    tok("seal_r0_accuracy_too_large", "TSA 1 over the seal of R0, with an accuracy of 10^12 s, past the year 9999",
+        r0, tsa1, "2026-09-25T11:05:00Z", 128, accuracy_seconds=10 ** 12)
+    tok("seal_r0_accuracy_millis", "TSA 1 over the seal of R0, with an accuracy of 1000 millis (RFC 3161 allows 1 "
+        "to 999)", r0, tsa1, "2026-09-25T11:05:00Z", 130, accuracy_millis=1000)
+    tok("sig_cp_a_feb30", "TSA 1 over cp_a_feb30's signature value", sig_of("cp_a_feb30"), tsa1,
+        "2026-09-27T12:05:00Z", 129)
     # Changed after signing, without re-signing.
     _, signature = make_token(tsa1[0], tsa1[1], r0, when("2026-09-25T11:05:00Z"), 101)
     tokens["seal_r0_bad_signature"] = {"about": "seal_r0 with the last byte of its signature changed",
@@ -471,9 +519,8 @@ def build():
             entry["revoked_at"], entry["revocation_reason"] = revoked
         policy["keys"].append(entry)
 
+    # One public key has one key reference, one holder and one role: the check refuses a policy that breaks this.
     key("witness-a-1", "witness-a-1", "Example witness A (test only)", "witness", "2026-09-01T00:00:00Z",
-        "2027-08-31T23:59:59Z")
-    key("witness-a-mirror", "witness-a-1", "Example witness A (test only)", "witness", "2026-09-01T00:00:00Z",
         "2027-08-31T23:59:59Z")
     key("witness-b-1", "witness-b-1", "Example witness B (test only)", "witness", "2026-01-01T00:00:00Z",
         "2026-12-31T23:59:59Z", ("2026-09-30T00:00:00Z", "superseded"))
@@ -485,15 +532,15 @@ def build():
         "2026-09-15T23:59:59Z")
     key("issuer-seal-1", "issuer-seal-1", "Example issuer (test only)", "organisation", "2026-01-01T00:00:00Z",
         "2027-12-31T23:59:59Z")
-    for ref, holder, refs in (
-            ("witness-a", "Example witness A (test only)", ["witness-a-1", "witness-a-mirror"]),
-            ("witness-b", "Example witness B (test only)", ["witness-b-1", "witness-b-2"]),
-            ("witness-c", "Example witness C (test only)", ["witness-c-1"]),
-            ("witness-d", "Example witness D (test only)", ["witness-d-1"]),
+    for ref, holder, refs, chains in (
+            ("witness-a", "Example witness A (test only)", ["witness-a-1"], [CHAIN, CHAIN_ACCENTED]),
+            ("witness-b", "Example witness B (test only)", ["witness-b-1", "witness-b-2"], [CHAIN]),
+            ("witness-c", "Example witness C (test only)", ["witness-c-1"], [CHAIN]),
+            ("witness-d", "Example witness D (test only)", ["witness-d-1"], [CHAIN]),
             # Misconfigured on purpose: the issuer's own key listed for a checkpoint source. The role check stops it.
-            ("witness-f", "Example issuer (test only)", ["issuer-seal-1"])):
+            ("witness-f", "Example issuer (test only)", ["issuer-seal-1"], [CHAIN])):
         policy["checkpoint_sources"].append({"source_ref": ref, "kind": "witness", "holder": holder,
-                                             "chain_ids": [CHAIN], "key_refs": refs})
+                                             "chain_ids": chains, "key_refs": refs})
     policy["checkpoint_sources"].append({"source_ref": "log-e", "kind": "transparency_log",
                                          "holder": "Example log E (test only)", "chain_ids": [CHAIN]})
 
@@ -527,6 +574,7 @@ def build():
         "sig_cp_c_at_revocation": timestamp(subject_signature("cp_c"), "sig_cp_c_at_revocation"),
         "link_1_early": timestamp({"kind": "chain_link", "chain_id": CHAIN, "sequence": 1, "value_hex": links["L1"]},
                                   "link_1_early"),
+        "sig_cp_a_feb30": timestamp(subject_signature("cp_a_feb30"), "sig_cp_a_feb30"),
     }
     context = {
         "chain_id": CHAIN,
@@ -567,6 +615,7 @@ def build():
         "profile": "dps-anchoring-report",
         "profile_version": VERSION,
         "trust_policy_ref": policy["policy_ref"],
+        "trust_policy": {"status": "verified"},
         "attachment_digest": sha256(compact(attachment)).hex(),
         "export_digest": sha256(compact(exports["full"])).hex(),
         "export_entry_count": 3,
@@ -600,7 +649,8 @@ def build():
                  "L2 are those of the portable verification cases. Exports are portable verification 0.1.0 exports. "
                  "Each checkpoint names the test key it was signed with (signed_with) and gives signed_bytes_hex, "
                  "the bytes a verifier builds from it under the shared rule, and, where the key signed something "
-                 "else, signature_made_over_hex. Each token gives "
+                 "else, signature_made_over_hex. cp_accented's chain_id is not ASCII: its length prefix counts 19 "
+                 "UTF-8 bytes, not 17 characters. Each token gives "
                  "imprint_of_hex, the bytes its messageImprint is the SHA-256 of. A document's bytes as received "
                  "(for attachment_digest and export_digest) are its JSON with no whitespace, in UTF-8.",
         "test_keys": test_keys,

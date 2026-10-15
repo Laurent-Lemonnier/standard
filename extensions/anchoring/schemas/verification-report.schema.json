@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.1.0/verification-report.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.1.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.1.0. Binds only an implementation that says it uses this extension.",
+  "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.2.0/verification-report.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.1.0. Binds only an implementation that says it uses this extension.",
   "title": "Anchoring verification report",
   "description": "What a verifier found for each independent timestamp and each checkpoint, as separate dimensions, each naming the source it was checked against, with the scope of its conclusion. There is deliberately no overall result: no assertion stands for another, and nothing here is a legal conclusion or a Conformance Level.",
   "type": "object",
@@ -10,6 +10,7 @@
     "profile",
     "profile_version",
     "trust_policy_ref",
+    "trust_policy",
     "export_digest",
     "export_entry_count",
     "chain_id",
@@ -21,8 +22,18 @@
   ],
   "properties": {
     "profile": {"const": "dps-anchoring-report"},
-    "profile_version": {"const": "0.1.0"},
+    "profile_version": {"const": "0.2.0"},
     "trust_policy_ref": {"type": "string", "minLength": 1, "description": "The trust policy the verifier configured independently of the export and the attachment."},
+    "trust_policy": {
+      "description": "Whether the policy itself was accepted: one public key, one key reference, one holder, one role; one reference, one entry. A refused policy fails every dimension that relies on it. The same object as in a signatures report.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["verified", "failed"]},
+        "findings": {"$ref": "#/$defs/findings"}
+      }
+    },
     "attachment_digest": {"$ref": "#/$defs/sha256_hex", "description": "SHA-256 of the attachment's bytes as received."},
     "export_digest": {"$ref": "#/$defs/sha256_hex", "description": "SHA-256 of the export's bytes as received."},
     "export_entry_count": {"type": "integer", "minimum": 1},
@@ -41,8 +52,22 @@
     "checkpoints": {"type": "array", "items": {"$ref": "#/$defs/checkpoint_result"}},
     "scope_of_conclusion": {"$ref": "#/$defs/scope_of_conclusion"}
   },
-  "if": {"properties": {"timestamp_count": {"minimum": 1}}, "required": ["timestamp_count"]},
-  "then": {"required": ["attachment_digest"]},
+  "allOf": [
+    {
+      "if": {"properties": {"timestamp_count": {"minimum": 1}}, "required": ["timestamp_count"]},
+      "then": {"required": ["attachment_digest"]}
+    },
+    {
+      "if": {"properties": {"trust_policy": {"properties": {"status": {"const": "failed"}}}}, "required": ["trust_policy"]},
+      "then": {
+        "description": "A refused policy: nothing is verified against it.",
+        "properties": {
+          "timestamps": {"items": {"properties": {"status": {"const": "failed"}}}},
+          "checkpoints": {"items": {"properties": {"status": {"const": "failed"}}}}
+        }
+      }
+    }
+  ],
   "$defs": {
     "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "ref": {"type": "string", "minLength": 1, "maxLength": 256},
@@ -93,7 +118,7 @@
             "subject_bytes": {"$ref": "#/$defs/status", "description": "The subject's bytes are the seal, link or signature value it names."},
             "message_digest": {"$ref": "#/$defs/status", "description": "The signed messageDigest is the SHA-256 of the encapsulated TSTInfo, and the signed content type is id-ct-TSTInfo."},
             "tsa_signature": {"$ref": "#/$defs/status", "description": "The signer the token names is the pinned certificate, and its signature over the signed attributes verifies with that certificate's key."},
-            "signer_certificate": {"$ref": "#/$defs/status", "description": "The ESSCertIDv2 certificate hash, when the token has one, is that of the pinned certificate."},
+            "signer_certificate": {"$ref": "#/$defs/status", "description": "The ESSCertIDv2 certificate hash, when the token has one made with SHA-256, is that of the pinned certificate. Without one, or with one made with another hash, not_checked."},
             "tsa_state": {"$ref": "#/$defs/status", "description": "genTime within the policy's window for the authority, and before its revocation."}
           }
         },
@@ -171,7 +196,7 @@
           "required": ["count", "head_link"],
           "properties": {
             "chain_id": {"type": "string", "minLength": 1},
-            "count": {"type": "integer", "minimum": 1},
+            "count": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
             "head_link": {"$ref": "#/$defs/sha256_hex"},
             "checkpoint_time": {"$ref": "#/$defs/instant"}
           }

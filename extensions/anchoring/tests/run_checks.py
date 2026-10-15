@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Checks for the anchoring extension, version 0.1.0 (a proposal).
+"""Checks for the anchoring extension, version 0.2.0 (a proposal).
 
 Runs the cases in cases.json over the values in vectors.json, which generate_vectors.py writes:
 
@@ -13,6 +13,9 @@ Runs the cases in cases.json over the values in vectors.json, which generate_vec
   checkpoint cases  the reference check of one checkpoint: where the verifier obtained it, its signature, its key's
                     state when it signed, and the export compared with it
   pairing cases     a report read with the documents it covers (JSON Schema cannot compare two documents)
+
+The reference check gives a result for every input that is valid against the schemas, and never stops on one. A case
+in which it raises an exception fails, whatever the case expects.
 
 Dependencies: jsonschema (tools/requirements.txt), cryptography and asn1crypto (requirements.txt in this folder). This
 file parses the tokens with asn1crypto and verifies every signature with cryptography; it implements no
@@ -48,8 +51,9 @@ SCHEMAS = {
     "report": HERE.parent / "schemas" / "verification-report.schema.json",
 }
 PV_EXPORT_SCHEMA = ROOT / "extensions" / "portable-verification" / "schemas" / "verification-export.schema.json"
-PROFILE, VERSION = "dps-anchoring", "0.1.0"
+PROFILE, VERSION = "dps-anchoring", "0.2.0"
 MAGIC = b"DPS-SIG\x00"
+MAX_COUNT = 2 ** 53 - 1  # the largest count: JSON readers agree exactly on every integer up to it (RFC 8259 6)
 P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 CHECKS = ("token", "message_imprint", "subject_bytes", "message_digest", "tsa_signature", "signer_certificate",
           "tsa_state")
@@ -66,12 +70,18 @@ def compact(doc):
 
 
 def instant(text):
-    """A time read as an instant, or None when it is not a time or has no offset."""
+    """A time read as an instant, or None when it is not a time or has no offset. A date that does not exist, such as
+    2026-02-30, and a leap second (23:59:60) are not times."""
     try:
         t = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except (AttributeError, TypeError, ValueError):
         return None
     return t if t.tzinfo is not None else None
+
+
+def json_integer(x):
+    """A number written as a JSON integer. JSON Schema accepts 3.0 as an integer; json reads it as a float."""
+    return isinstance(x, int) and not isinstance(x, bool)
 
 
 def iso(t):
@@ -109,13 +119,67 @@ def signed_bytes(fields):
     return MAGIC + b"".join(lp(f) for f in fields)
 
 
+class Unencodable(ValueError):
+    """A value the signed-bytes rule cannot encode. The verifier reports it as failed."""
+
+
+def text_field(name, value):
+    try:
+        return value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise Unencodable(f"{name} has no UTF-8 encoding: it holds a lone surrogate") from None
+
+
+def count_field(value):
+    if not json_integer(value):
+        raise Unencodable(f"count is written as {value!r}, not as a JSON integer")
+    if not 1 <= value <= MAX_COUNT:
+        raise Unencodable(f"count is {value}; a checkpoint's count is from 1 to 2^53 - 1")
+    return value.to_bytes(8, "big")
+
+
 def checkpoint_signed_bytes(cp):
     """profile, profile_version, "checkpoint", key_ref, chain_id, count (8-byte big-endian unsigned), head_link (32 raw
-    bytes), checkpoint_time (UTF-8). The verifier takes the first three from what it checks, never from the object."""
+    bytes), checkpoint_time (UTF-8). The verifier takes the first three from what it checks, never from the object.
+    Raises Unencodable for a value the rule cannot encode."""
     return signed_bytes([PROFILE.encode("utf-8"), VERSION.encode("utf-8"), b"checkpoint",
-                         cp["signature"]["key_ref"].encode("utf-8"), cp["chain_id"].encode("utf-8"),
-                         cp["count"].to_bytes(8, "big"), bytes.fromhex(cp["head_link"]),
-                         cp["checkpoint_time"].encode("utf-8")])
+                         text_field("key_ref", cp["signature"]["key_ref"]), text_field("chain_id", cp["chain_id"]),
+                         count_field(cp["count"]), bytes.fromhex(cp["head_link"]),
+                         text_field("checkpoint_time", cp["checkpoint_time"])])
+
+
+# ---------------------------------------------------------------- the verifier's trust policy
+
+def check_policy(policy):
+    """One public key has one key reference, one holder and one role; a reference names one entry. A policy that
+    breaks this is refused as a whole: every dimension that relies on it is reported as failed. The same rule, the
+    same result and the same wording as the signatures profile's check."""
+    findings = []
+    for items, ref, what in ((policy["keys"], "key_ref", "key reference"), (policy["tsas"], "tsa_ref",
+                             "authority reference"), (policy["checkpoint_sources"], "source_ref", "source reference")):
+        seen = set()
+        for item in items:
+            if item[ref] in seen:
+                findings.append(f"{what} {item[ref]} is listed twice; a {what} names one "
+                                + ("key" if ref == "key_ref" else "entry"))
+            seen.add(item[ref])
+    by_public = {}
+    for k in policy["keys"]:
+        by_public.setdefault((k["algorithm"], k["public_key_hex"].lower()), []).append(k)
+    for group in by_public.values():
+        if len(group) < 2:
+            continue
+        what = [w for w, f in (("references", "key_ref"), ("holders", "holder"), ("roles", "role"))
+                if len({k[f] for k in group}) > 1]
+        findings.append(f"{', '.join(k['key_ref'] for k in group)} are one public key listed {len(group)} times, under "
+                        f"different {' and '.join(what) if what else 'entries'}; one public key has one key "
+                        "reference, one holder and one role")
+    return {"status": "failed", "findings": findings} if findings else {"status": "verified"}
+
+
+def refused(policy_result, what):
+    return {"status": "failed", "findings": [f"{what} not checked: the trust policy is refused ("
+                                             + "; ".join(policy_result["findings"]) + ")"]}
 
 
 # ---------------------------------------------------------------- portable verification's chain
@@ -143,7 +207,7 @@ def affirmation_time(entry):
         return None, f"{entry['decision_id']}: the covered bytes do not match the seal, so their time is not read"
     try:
         record = strict_json(raw)
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:  # RecursionError: JSON nested too deep to read
         return None, f"{entry['decision_id']}: the covered bytes cannot be read: {exc}"
     stated = ((record.get("affirmation_record") if isinstance(record, dict) else None) or {}).get("timestamp")
     if not isinstance(stated, str):
@@ -184,16 +248,25 @@ def read_token(raw):
     if not signer["signed_attrs"].dump().startswith(b"\xa0"):
         raise ValueError("the signer has no signed attributes (RFC 5652 5.3: required for a TSTInfo)")
     tst.native, signer.native  # parse every field now, so a malformed token fails here
+    if not tst["gen_time"].contents.endswith(b"Z"):
+        raise ValueError(f"the genTime {tst['gen_time'].contents.decode('ascii', 'replace')} is not in UTC "
+                         "(RFC 3161 2.4.2: it ends in Z)")
+    try:
+        tst["gen_time"].native + accuracy(tst)
+    except OverflowError:
+        raise ValueError("the genTime plus the accuracy is past the year 9999, so it cannot be written as a time")
     return tst, econtent, signer
 
 
 def accuracy(tst):
-    a = tst["accuracy"]
-    if a.native is None:
+    """The token's accuracy. RFC 3161 2.4.2: millis and micros are from 1 to 999; seconds cannot be negative."""
+    n = tst["accuracy"].native
+    if n is None:
         return timedelta(0)
-    n = a.native
-    return timedelta(seconds=n.get("seconds") or 0, milliseconds=n.get("millis") or 0,
-                     microseconds=n.get("micros") or 0)
+    seconds, millis, micros = n.get("seconds"), n.get("millis"), n.get("micros")
+    if (seconds is not None and seconds < 0) or any(x is not None and not 1 <= x <= 999 for x in (millis, micros)):
+        raise ValueError(f"the accuracy (seconds {seconds}, millis {millis}, micros {micros}) is out of range")
+    return timedelta(seconds=seconds or 0, milliseconds=millis or 0, microseconds=micros or 0)
 
 
 def check_timestamp(ts, policy, export, chain_id, held):
@@ -219,7 +292,10 @@ def check_timestamp(ts, policy, export, chain_id, held):
             findings.append(f"the subject's value is not the seal of {subject['decision_id']} in the export")
     elif kind == "chain_link":
         digests = entry_digests(export)
-        if subject["chain_id"] != chain_id:
+        if not json_integer(subject["sequence"]):
+            checks["subject_bytes"] = "failed"
+            findings.append(f"the subject's sequence is written as {subject['sequence']!r}, not as a JSON integer")
+        elif subject["chain_id"] != chain_id:
             findings.append(f"the subject names chain {subject['chain_id']}; the verifier checks {chain_id}")
         elif subject["sequence"] >= len(digests):
             findings.append(f"the export has {len(digests)} entries, so link({subject['sequence']}) cannot be "
@@ -229,6 +305,9 @@ def check_timestamp(ts, policy, export, chain_id, held):
         else:
             checks["subject_bytes"] = "failed"
             findings.append(f"the subject's value is not link({subject['sequence']}) of the export")
+    elif subject["of"]["assertion"] != "checkpoint":
+        findings.append(f"the subject names a {subject['of']['assertion']} of the signatures profile, which checks it; "
+                        "this check holds checkpoints only")
     else:
         same = [c for c in held if "signature" in c and c["signature"]["value_b64"] == subject["value_b64"]]
         if not same:
@@ -246,7 +325,7 @@ def check_timestamp(ts, policy, export, chain_id, held):
         tst, econtent, signer = read_token(base64.b64decode(ts["token_b64"], validate=True))
     except Exception as exc:  # asn1crypto raises several types for bytes that are not a token
         checks["token"] = "failed"
-        findings.append(f"not a time-stamp token: {exc}")
+        findings.append(f"not a valid time-stamp token: {exc}")
         out["status"] = "failed"
         return out
     checks["token"] = "verified"
@@ -275,22 +354,37 @@ def check_timestamp(ts, policy, export, chain_id, held):
     else:
         checks["message_digest"] = "verified"
 
+    policy_result = check_policy(policy)
+    if policy_result["status"] != "verified":
+        checks["tsa_signature"] = checks["tsa_state"] = "failed"
+        findings.append(refused(policy_result, "the authority")["findings"][0])
+        out["status"] = "failed"
+        return out
     tsa = next((t for t in policy["tsas"] if t["tsa_ref"] == ts["tsa_ref"]), None)
     if tsa is None:
         checks["tsa_signature"] = "failed"
         findings.append(f"{ts['tsa_ref']} is not a time-stamping authority in the trust policy")
     else:
         cert_der = base64.b64decode(tsa["certificate_b64"], validate=True)
-        pinned = asn1_x509.Certificate.load(cert_der)
+        try:
+            pinned = asn1_x509.Certificate.load(cert_der, strict=True)
+            pinned.native
+            key = x509.load_der_x509_certificate(cert_der).public_key()
+        except Exception:  # cryptography and asn1crypto raise several types for bytes that are not a certificate
+            pinned = None
         algorithms = (signer["digest_algorithm"]["algorithm"].native, signer["signature_algorithm"]["algorithm"].native)
         sid = signer["sid"]
-        if sid.name == "issuer_and_serial_number":
+        if pinned is None:
+            names_pinned = False
+        elif sid.name == "issuer_and_serial_number":
             names_pinned = (sid.chosen["issuer"].dump() == pinned.issuer.dump()
                             and sid.chosen["serial_number"].native == pinned.serial_number)
         else:
             names_pinned = sid.chosen.native == pinned.key_identifier
-        key = x509.load_der_x509_certificate(cert_der).public_key()
-        if algorithms != ("sha256", "sha256_ecdsa") or not (
+        if pinned is None:
+            checks["tsa_signature"] = "failed"
+            findings.append(f"the certificate pinned for {ts['tsa_ref']} cannot be read")
+        elif algorithms != ("sha256", "sha256_ecdsa") or not (
                 isinstance(key, ec.EllipticCurvePublicKey) and key.curve.name == "secp256r1"):
             checks["tsa_signature"] = "not_supported"
             findings.append(f"this check supports ECDSA P-256 with SHA-256; the token uses {algorithms[1]}")
@@ -306,24 +400,34 @@ def check_timestamp(ts, policy, export, chain_id, held):
                 checks["tsa_signature"] = "failed"
                 findings.append(f"the signature does not verify with the certificate pinned for {ts['tsa_ref']}")
         v2 = values.get("signing_certificate_v2")
-        if v2 is None:
+        if pinned is None:
+            findings.append("no certificate to compare the ESSCertIDv2 with")
+        elif v2 is None:
             findings.append("the token has no ESSCertIDv2 (signingCertificateV2); the signer is identified by its "
                             "sid only")
+        elif len(v2) != 1 or len(v2[0]) != 1:
+            checks["signer_certificate"] = "failed"
+            findings.append("the signingCertificateV2 attribute is not one attribute with one value")
         elif len(v2[0][0]["certs"]) == 0:
             checks["signer_certificate"] = "failed"
             findings.append("the signingCertificateV2 attribute lists no certificate")
         else:
             first = v2[0][0]["certs"][0]
             if first["hash_algorithm"]["algorithm"].native != "sha256":
-                checks["signer_certificate"] = "not_supported"
-                findings.append("this check reads an ESSCertIDv2 made with SHA-256 only")
+                # As if there were none: the pinned key and the signer identifier already fix who signed.
+                findings.append(f"the ESSCertIDv2 is made with {first['hash_algorithm']['algorithm'].native}, and this "
+                                "check reads one made with SHA-256 only; the signer is identified by its sid only")
             elif first["cert_hash"].native == sha256(cert_der):
                 checks["signer_certificate"] = "verified"
             else:
                 checks["signer_certificate"] = "failed"
                 findings.append(f"the ESSCertIDv2 names another certificate than the one pinned for {ts['tsa_ref']}")
         gen = tst["gen_time"].native
-        if not instant(tsa["not_before"]) <= gen <= instant(tsa["not_after"]):
+        window = instant(tsa["not_before"]), instant(tsa["not_after"])
+        if None in window or (tsa.get("revoked_at") and instant(tsa["revoked_at"]) is None):
+            checks["tsa_state"] = "failed"
+            findings.append(f"a time in the trust policy for {ts['tsa_ref']} cannot be read as a UTC time")
+        elif not window[0] <= gen <= window[1]:
             checks["tsa_state"] = "failed"
             findings.append(f"genTime {iso(gen)} is outside the policy's window for {ts['tsa_ref']}")
         elif tsa.get("revocation_reason") == "compromised":
@@ -355,7 +459,8 @@ def check_timestamp(ts, policy, export, chain_id, held):
 
     # The issuer's own time for the subject, compared with T. It never changes the timestamp's own status.
     if kind == "signature":
-        stated, stated_in, why = same[0]["checkpoint_time"], "checkpoint_time", None
+        stated, stated_in = same[0]["checkpoint_time"], "checkpoint_time"
+        why = None if instant(stated) else f"the checkpoint_time {stated} is not a real UTC time: not compared"
     else:
         entries = export["entries"]
         upto = ([e for e in entries if e["decision_id"] == subject["decision_id"]][:1] if kind == "seal"
@@ -399,7 +504,14 @@ def key_state(key, cp, covering):
         out["revocation_reason"] = key["revocation_reason"]
     findings = []
     status = "verified"
-    if stated < instant(key["not_before"]):
+    bounds = [instant(key[k]) for k in ("not_before", "not_after")] + (
+        [instant(key["revoked_at"])] if key.get("revoked_at") else [])
+    if stated is None or None in bounds:
+        status = "failed"
+        findings.append(("checkpoint_time" if stated is None else f"a time in the trust policy for {key['key_ref']}")
+                        + " cannot be read as a UTC time (a date that does not exist, or a leap second), so the "
+                        "key's state when it signed cannot be read")
+    elif stated < instant(key["not_before"]):
         status = "failed"
         findings.append(f"stated as made at {cp['checkpoint_time']}, before {key['key_ref']}'s not_before")
     elif upper > instant(key["not_after"]):
@@ -456,10 +568,14 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         out["source_ref"] = obtained["source_ref"]
     if cp is not None:
         out["checkpoint"] = {k: cp[k] for k in ("chain_id", "count", "head_link", "checkpoint_time") if k in cp}
+    policy_result = check_policy(policy)
+    is_refused = policy_result["status"] != "verified"
     source = next((s for s in policy["checkpoint_sources"] if s["source_ref"] == obtained.get("source_ref")), None)
     if where == "same_export":
         independence = {"status": "failed", "findings": ["found in the export: a checkpoint from the same export is "
                                                          "never independent"]}
+    elif is_refused:
+        independence = refused(policy_result, "the source")
     elif source is None:
         independence = {"status": "failed", "findings": [f"{obtained.get('source_ref')} is not a checkpoint source "
                                                          "in the trust policy"]}
@@ -470,7 +586,8 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         independence = {"status": "verified"}
     out["independence"] = independence
     if cp is None:
-        out.update(status="unavailable", signature={"status": "not_checked"}, key_state={"status": "not_checked"},
+        out.update(status="failed" if is_refused else "unavailable", signature={"status": "not_checked"},
+                   key_state={"status": "not_checked"},
                    comparison={"status": "not_checked"},
                    findings=[f"{obtained.get('source_ref')} gave no checkpoint for {chain_id}"])
         return out
@@ -479,6 +596,8 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
     key = None
     if "signature" not in cp:
         signature = {"status": "not_checked", "findings": ["the checkpoint carries no signature"]}
+    elif is_refused:
+        signature = {"key_ref": cp["signature"]["key_ref"], **refused(policy_result, "the signature")}
     elif source is not None and source["kind"] != "witness":
         signature = {"status": "not_supported", "findings": [f"{source['source_ref']} is a {source['kind']}; this "
                                                              "version defines no format for it"]}
@@ -502,12 +621,16 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
             try:
                 public.verify(base64.b64decode(s["value_b64"], validate=True), checkpoint_signed_bytes(cp))
                 signature.update(status="verified", reference_source="trust_policy")
+            except Unencodable as exc:
+                signature.update(status="failed", findings=[f"the signed bytes cannot be built: {exc}"])
             except InvalidSignature:
                 signature.update(status="failed", findings=["the signature does not verify over the checkpoint's "
                                                             "signed bytes"])
     out["signature"] = signature
 
-    if signature["status"] == "verified":
+    if is_refused:
+        out["key_state"] = refused(policy_result, "the key state")
+    elif signature["status"] == "verified":
         value = base64.b64decode(cp["signature"]["value_b64"])
         covering = [(i, r) for i, r in enumerate(ts_results) if r["status"] == "verified" and r["_value"] == value]
         out["key_state"] = key_state(key, cp, covering)
@@ -537,13 +660,28 @@ def run_context(ctx):
     return ts_results, cp_results
 
 
+def not_integers(doc, path=""):
+    """The paths of the numbers in a document that are not written as JSON integers, such as 0.0."""
+    if isinstance(doc, float):
+        return [path]
+    if isinstance(doc, dict):
+        return [p for k, x in doc.items() for p in not_integers(x, f"{path}/{k}")]
+    if isinstance(doc, list):
+        return [p for i, x in enumerate(doc) for p in not_integers(x, f"{path}/{i}")]
+    return []
+
+
 def read_with_documents(report, ctx):
     """What a reader holding a report and the documents it covers checks; JSON Schema cannot compare documents."""
-    problems = []
+    problems = [f"{p} is not written as a JSON integer; every number in a report is one" for p in not_integers(report)]
     ts_ref, cp_ref = run_context(ctx)
     attachment, export = ctx["attachment"], ctx["export"]
     if report["trust_policy_ref"] != ctx["policy"]["policy_ref"]:
         problems.append("trust_policy_ref is not the policy the documents are read with")
+    policy_ref = check_policy(ctx["policy"])
+    if report["trust_policy"]["status"] != policy_ref["status"]:
+        problems.append(f"the trust policy reported {report['trust_policy']['status']}; the reference check finds "
+                        f"{policy_ref['status']}")
     if attachment is not None and report.get("attachment_digest") != sha256(compact(attachment)).hex():
         problems.append("attachment_digest is not the digest of the attachment read with it")
     if report["export_digest"] != sha256(compact(export)).hex():
@@ -567,7 +705,7 @@ def read_with_documents(report, ctx):
 
     for r in report["timestamps"]:
         i = r["timestamp_index"]
-        if i >= len(stated):
+        if not json_integer(i) or i >= len(stated):
             continue
         ref = ts_ref[i]
         if r["subject"] != shown_subject(stated[i]["subject"]) or r["tsa_ref"] != stated[i]["tsa_ref"]:
@@ -590,7 +728,7 @@ def read_with_documents(report, ctx):
 
     for r in report["checkpoints"]:
         i = r["checkpoint_index"]
-        if i >= len(ctx["obtained"]):
+        if not json_integer(i) or i >= len(ctx["obtained"]):
             continue
         ref = cp_ref[i]
         if (r["obtained_from"], r.get("source_ref")) != (ref["obtained_from"], ref.get("source_ref")):
@@ -757,6 +895,38 @@ def vector_case(c, v):
                                    cp["checkpoint_time"].encode("utf-8")])
             if variant == base:
                 bad.append(f"field {i + 1}")
+    elif kind == "counting_characters":
+        # The bytes of a mistaken encoder, whose text prefixes count characters, beside the shared rule's.
+        x = v["checkpoints"][c["checkpoint"]]
+        cp = x["checkpoint"]
+
+        def build(counting_characters):
+            def text(t):
+                n = len(t) if counting_characters else len(t.encode("utf-8"))
+                return n.to_bytes(4, "big") + t.encode("utf-8")
+            return (MAGIC + b"".join(text(t) for t in (PROFILE, VERSION, "checkpoint", cp["signature"]["key_ref"],
+                                                      cp["chain_id"]))
+                    + lp(cp["count"].to_bytes(8, "big")) + lp(bytes.fromhex(cp["head_link"]))
+                    + text(cp["checkpoint_time"]))
+
+        right, wrong = build(False), build(True)
+        if right != checkpoint_signed_bytes(cp) or right.hex() != x["signed_bytes_hex"]:
+            bad.append("the shared rule's bytes")
+        if (lp(cp["chain_id"].encode("utf-8"))[:4].hex(), len(cp["chain_id"]).to_bytes(4, "big").hex()) != (
+                c["chain_id_prefix"], c["chain_id_prefix_counting_characters"]) or wrong == right:
+            bad.append("the chain_id prefixes")
+        public = Ed25519PrivateKey.from_private_bytes(sha256(v["test_keys"][x["signed_with"]]["seed_text"].encode(
+            "utf-8"))).public_key()
+        value = base64.b64decode(cp["signature"]["value_b64"])
+        for name, over, verifies in (("the shared rule's bytes", right, True), ("the bytes counted in characters",
+                                                                                wrong, False)):
+            try:
+                public.verify(value, over)
+                ok = True
+            except InvalidSignature:
+                ok = False
+            if ok != verifies:
+                bad.append(f"the signature {'does not verify' if verifies else 'verifies'} over {name}")
     elif kind == "token_imprints":
         for n, t in v["tokens"].items():
             if n in c["not_tokens"]:
@@ -795,12 +965,33 @@ def timestamp_input(spec, v, validators):
     return ts
 
 
+def schema_valid(validator, doc, what):
+    found = errors(validator, doc)
+    if found:
+        raise ValueError(f"the {what} must be schema-valid for this case: {found[0]}")
+    return doc
+
+
+class Raised(Exception):
+    """The reference check raised an exception on input valid against the schemas: never an expected outcome."""
+
+
+def reference(check, *args):
+    try:
+        return check(*args)
+    except Exception as exc:
+        raise Raised(f"the reference check raised {type(exc).__name__} on schema-valid input: {exc}") from exc
+
+
 def timestamp_case(c, v, validators):
     ts = timestamp_input(c["timestamp"], v, validators)
-    export = apply_patch(v["exports"][c.get("export", "full")], c.get("export_patch", []), v)
-    policy = apply_patch(v["trust_policy"], c.get("policy_patch", []), v)
-    held = [v["checkpoints"][n]["checkpoint"] for n in c.get("held_checkpoints", [])]
-    r = check_timestamp(ts, policy, export, chain_of(c, v), held)
+    export = schema_valid(validators["pv_export"], apply_patch(v["exports"][c.get("export", "full")],
+                                                               c.get("export_patch", []), v), "export")
+    policy = schema_valid(validators["trust_policy"], apply_patch(v["trust_policy"], c.get("policy_patch", []), v),
+                          "trust policy")
+    held = [schema_valid(validators["checkpoint"], v["checkpoints"][n]["checkpoint"], "held checkpoint")
+            for n in c.get("held_checkpoints", [])]
+    r = reference(check_timestamp, ts, policy, export, chain_of(c, v), held)
     summary = {"status": r["status"], **r["checks"], "issuer_time": r["issuer_time"]["status"]}
     for k in ("existed_no_later_than", "gen_time"):
         if k in c["expected"]:
@@ -819,26 +1010,31 @@ def expected_timestamp(c):
 
 
 def checkpoint_case(c, v, validators):
-    export = v["exports"][c.get("export", "full")]
-    policy = apply_patch(v["trust_policy"], c.get("policy_patch", []), v)
+    """checkpoint: a name in vectors.json, {"from", "patch"}, issuer_checkpoint, or null. schema_valid: false marks a
+    checkpoint that is deliberately not valid against the schema, which the check must still report."""
+    export = schema_valid(validators["pv_export"], v["exports"][c.get("export", "full")], "export")
+    policy = schema_valid(validators["trust_policy"], apply_patch(v["trust_policy"], c.get("policy_patch", []), v),
+                          "trust policy")
     name = c["checkpoint"]
     if name is None:
         cp = None
     elif name == "issuer_checkpoint":
         cp = copy.deepcopy(export["issuer_checkpoint"])
     else:
-        cp = copy.deepcopy(v["checkpoints"][name]["checkpoint"])
+        cp = resolve(name if isinstance(name, dict) else f"/checkpoints/{name}/checkpoint", v)
         found = errors(validators["checkpoint"], cp)
-        if found:
+        if c.get("schema_valid", True) and found:
             raise ValueError(f"the checkpoint must be schema-valid for this case: {found[0]}")
+        if not c.get("schema_valid", True) and not found:
+            raise ValueError("the case says the checkpoint is not schema-valid, but it is")
     timestamps = [timestamp_input(t, v, validators) for t in c.get("timestamps", [])]
     held = [cp] if cp and "signature" in cp else []
     chain_id = chain_of(c, v)
-    ts_results = [check_timestamp(t, policy, export, chain_id, held) for t in timestamps]
+    ts_results = [reference(check_timestamp, t, policy, export, chain_id, held) for t in timestamps]
     obtained = {"checkpoint": cp, "obtained_from": c.get("obtained_from", "configured_source")}
     if c.get("source_ref"):
         obtained["source_ref"] = c["source_ref"]
-    r = check_checkpoint(obtained, policy, export, chain_id, ts_results)
+    r = reference(check_checkpoint, obtained, policy, export, chain_id, ts_results)
     summary = {d: (r[d] if d == "status" else r[d]["status"]) for d in CHECKPOINT_DIMENSIONS}
     if r["key_state"]["status"] == "verified":
         summary["time_basis"] = r["key_state"]["time_basis"]
@@ -875,15 +1071,17 @@ def pairing_case(c, v, validators):
         obtained.append(o)
     digests = {"attachment": sha256(compact(attachment)).hex(), "export": sha256(compact(export)).hex()}
     report = apply_patch(v["base_report"], c["report_patch"], v, digests)
-    if errors(validators["report"], report) or errors(validators["attachment"], attachment):
+    if any(errors(validators[k], d) for k, d in (("report", report), ("attachment", attachment),
+                                                 ("pv_export", export), ("trust_policy", policy))):
         return "error", "every document must be schema-valid for this case"
     ctx = {"attachment": attachment, "export": export, "policy": policy, "chain_id": base["chain_id"],
            "obtained": obtained}
-    problems = read_with_documents(report, ctx)
+    problems = reference(read_with_documents, report, ctx)
     return ("inconsistent" if problems else "consistent"), "; ".join(problems)
 
 
 def main():
+    sys.stdout.reconfigure(errors="backslashreplace")  # some cases hold text with no UTF-8 encoding, on purpose
     cases = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
     v = json.loads((HERE / "vectors.json").read_text(encoding="utf-8"))
     validators = {}
@@ -909,10 +1107,12 @@ def main():
             total += 1
             try:
                 got, detail = run(c)
+            except Raised as exc:  # the reference check stopped on schema-valid input: the case fails
+                got, detail = "raised", str(exc)
             except Exception as exc:  # a malformed case fails, it does not stop the run
                 got, detail = "error", f"{type(exc).__name__}: {exc}"
             want = expect(c)
-            ok = got == want
+            ok = got == want and want not in ("error", "raised")  # a crash is never an expected outcome
             label = c.get("schema", group)
             print(f"[{'ok' if ok else 'FAIL':4}] {c['id']:4} {label:12} {c['description']}")
             if not ok:
