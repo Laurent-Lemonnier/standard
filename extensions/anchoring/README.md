@@ -192,4 +192,4 @@ Every key in the vectors is a test key only, derived from a published text: its 
 
 ## Credit
 
-Proposed by Laurent Lemonnier, iSoluce. Prepared with AI assistance and reviewed by Laurent. The shape of this extension was agreed in issue #29.
+Author: Laurent Lemonnier, iSoluce. Prepared with AI assistance and reviewed by Laurent. The shape of this extension was agreed in issue #29.
