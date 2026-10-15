@@ -1,0 +1,6 @@
+# Used only by the signatures extension's runner and vector generator, with tools/requirements.txt.
+# The same pins as the anchoring extension. Direct dependencies, and their dependencies, pinned.
+cryptography==50.0.2
+asn1crypto==1.5.1
+cffi==2.1.1
+pycparser==3.0
