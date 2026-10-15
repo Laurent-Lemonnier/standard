@@ -38,7 +38,7 @@ from asn1crypto import x509 as asn1_x509
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 from jsonschema import Draft202012Validator
 
@@ -57,6 +57,8 @@ MAX_COUNT = 2 ** 53 - 1  # the largest count: JSON readers agree exactly on ever
 P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 CHECKS = ("token", "message_imprint", "subject_bytes", "message_digest", "tsa_signature", "signer_certificate",
           "tsa_state")
+# The token signature algorithms this check supports (digest algorithm, signature algorithm): each with SHA-256.
+TOKEN_ALGORITHMS = {("sha256", "sha256_ecdsa"): "ECDSA P-256", ("sha256", "sha256_rsa"): "RSA PKCS#1 v1.5"}
 CHECKPOINT_DIMENSIONS = ("status", "independence", "signature", "key_state", "comparison")
 READABLE = {"application/json"}  # media types this check reads an issuer's time from
 
@@ -258,6 +260,30 @@ def read_token(raw):
     return tst, econtent, signer
 
 
+def key_kind(key):
+    if isinstance(key, ec.EllipticCurvePublicKey):
+        return f"an ECDSA key on {key.curve.name}"
+    if isinstance(key, rsa.RSAPublicKey):
+        return f"an RSA key of {key.key_size} bits"
+    return "a key of another kind"
+
+
+def key_fits(algorithm, key):
+    """Whether the pinned certificate's key is of the kind the token's signature algorithm names."""
+    if algorithm == "ECDSA P-256":
+        return isinstance(key, ec.EllipticCurvePublicKey) and key.curve.name == "secp256r1"
+    return isinstance(key, rsa.RSAPublicKey)
+
+
+def verify_token_signature(key, signature, data):
+    """ECDSA P-256 or RSA PKCS#1 v1.5 (RSASSA-PKCS1-v1_5), with SHA-256, as the pinned key decides; InvalidSignature
+    when it does not verify. RSASSA-PSS is not supported."""
+    if isinstance(key, rsa.RSAPublicKey):
+        key.verify(signature, data, padding.PKCS1v15(), hashes.SHA256())
+    else:
+        key.verify(signature, data, ec.ECDSA(hashes.SHA256()))
+
+
 def accuracy(tst):
     """The token's accuracy. RFC 3161 2.4.2: millis and micros are from 1 to 999; seconds cannot be negative."""
     n = tst["accuracy"].native
@@ -384,17 +410,21 @@ def check_timestamp(ts, policy, export, chain_id, held):
         if pinned is None:
             checks["tsa_signature"] = "failed"
             findings.append(f"the certificate pinned for {ts['tsa_ref']} cannot be read")
-        elif algorithms != ("sha256", "sha256_ecdsa") or not (
-                isinstance(key, ec.EllipticCurvePublicKey) and key.curve.name == "secp256r1"):
+        elif algorithms not in TOKEN_ALGORITHMS:
             checks["tsa_signature"] = "not_supported"
-            findings.append(f"this check supports ECDSA P-256 with SHA-256; the token uses {algorithms[1]}")
+            findings.append("this check supports ECDSA P-256 and RSA PKCS#1 v1.5, each with SHA-256; the token uses "
+                            f"{algorithms[1]} with {algorithms[0]}")
+        elif not key_fits(TOKEN_ALGORITHMS[algorithms], key):
+            checks["tsa_signature"] = "failed"
+            findings.append(f"the token's signature algorithm ({algorithms[1]}) does not fit the key of the "
+                            f"certificate pinned for {ts['tsa_ref']}, which is {key_kind(key)}")
         elif not names_pinned:
             checks["tsa_signature"] = "failed"
             findings.append(f"the token names another signer than the certificate pinned for {ts['tsa_ref']}")
         else:
             encoded = attrs.dump()  # tagged [0] in the token; signed as a SET OF (RFC 5652 5.4), as it appears
             try:
-                key.verify(signer["signature"].native, b"\x31" + encoded[1:], ec.ECDSA(hashes.SHA256()))
+                verify_token_signature(key, signer["signature"].native, b"\x31" + encoded[1:])
                 checks["tsa_signature"] = "verified"
             except InvalidSignature:
                 checks["tsa_signature"] = "failed"
@@ -856,6 +886,13 @@ def vector_case(c, v):
                     bad.append(f"{name} entry {i}: previous_link")
     elif kind == "test_keys":
         for name, k in v["test_keys"].items():
+            if k["algorithm"] == "RSA-2048":
+                # Not seed-derived: the key RFC 9500 publishes, held as its public modulus and exponent (V16 checks
+                # them against the RFC's text).
+                if (int(k["modulus_hex"], 16).bit_length() != 2048 or k["public_exponent_hex"] != "010001"
+                        or k["name"] != name or "RFC 9500" not in k["published_in"]):
+                    bad.append(name)
+                continue
             seed = sha256(k["seed_text"].encode("utf-8"))
             if k["algorithm"] == "Ed25519":
                 public = Ed25519PrivateKey.from_private_bytes(seed).public_key().public_bytes(
@@ -940,10 +977,25 @@ def vector_case(c, v):
     elif kind == "tsa_certificates":
         for n, cert in v["tsa_certificates"].items():
             der = base64.b64decode(cert["certificate_b64"])
-            point = x509.load_der_x509_certificate(der).public_key().public_bytes(
-                serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
-            if sha256(der).hex() != cert["sha256"] or point.hex() != v["test_keys"][n]["public_key_hex"]:
+            public, k = x509.load_der_x509_certificate(der).public_key(), v["test_keys"][n]
+            if isinstance(public, rsa.RSAPublicKey):
+                numbers = public.public_numbers()
+                same = (f"{numbers.n:x}", f"{numbers.e:x}") == (k["modulus_hex"].lstrip("0"),
+                                                               k["public_exponent_hex"].lstrip("0"))
+            else:
+                point = public.public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+                same = point.hex() == k["public_key_hex"]
+            if sha256(der).hex() != cert["sha256"] or not same:
                 bad.append(n)
+    elif kind == "published_rsa_key":
+        # The RSA test key against RFC 9500's text: the first and last bytes of the modulus as the RFC prints them, the
+        # modulus's SHA-256, the exponent, and the size. The private parameters are in generate_vectors.py.
+        k = v["test_keys"][c["key"]]
+        n = k["modulus_hex"]
+        if not (n.startswith(c["modulus_starts_with"]) and n.endswith(c["modulus_ends_with"])
+                and sha256(bytes.fromhex(n)).hex() == c["modulus_sha256"] and len(n) == c["bits"] // 4
+                and k["public_exponent_hex"] == c["public_exponent_hex"] and k["published_in"] == c["published_in"]):
+            bad.append(c["key"])
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")
