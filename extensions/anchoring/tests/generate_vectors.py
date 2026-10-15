@@ -1,19 +1,25 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Writes vectors.json for the anchoring extension, version 0.1.0 (a proposal).
+"""Writes vectors.json for the anchoring extension, version 0.2.0 (a proposal).
 
-TEST KEYS ONLY. Every key below is derived from a published text, so anyone can recompute it. Never derive a real
-key this way, and never trust anything signed by one of these keys.
+TEST KEYS ONLY. Every key below but one is derived from a published text, so anyone can recompute it. The one
+exception is the RSA key of the second time-stamping authority: it is the 2048-bit RSA test key that RFC 9500,
+section 2.1, publishes under the name "testRSA2048", written here as its parameters in hex, exactly as the RFC prints
+them. It is a published test key, so that no RSA key had to be generated here. Never derive a real key this way, never
+use a published key for anything real, and never trust anything signed by one of these keys.
 
-  seed               SHA-256 of the UTF-8 text "dps-anchoring 0.1.0 test key " followed by the key's name
+  seed               SHA-256 of the UTF-8 text "dps-anchoring 0.1.0 test key " followed by the key's name (the text
+                     is unchanged in 0.2.0, so the keys are those of 0.1.0)
   Ed25519 (witness)  the seed is the private key (RFC 8032, section 5.1.5)
   ECDSA P-256 (TSA)  the private scalar is (the seed read as a big-endian integer) mod (n - 1), plus 1
+  RSA-2048 (TSA)     RFC 9500, section 2.1, "testRSA2048", from its published parameters
 
-Signatures are deterministic: Ed25519 by definition, and ECDSA with the deterministic nonces of RFC 6979, through
-the cryptography package (OpenSSL 3.2 or later). The RFC 3161 tokens are built with asn1crypto. Re-running this
-script therefore writes the same bytes, and run_checks.py checks that it does.
+Signatures are deterministic: Ed25519 by definition, ECDSA with the deterministic nonces of RFC 6979, and RSA
+PKCS#1 v1.5 by construction, through the cryptography package (OpenSSL 3.2 or later). The RFC 3161 tokens are built
+with asn1crypto. Re-running this script therefore writes the same bytes, and run_checks.py checks that it does.
 
 Records R0 to R2 and their chain are those of the portable verification extension's cases. R1x is R1 with one
-changed word, re-sealed. R4 is a fourth synthetic record.
+changed word, re-sealed. R4 is a fourth synthetic record. CHAIN_ACCENTED is a chain identifier that is not ASCII, so
+that its length prefix (in UTF-8 bytes) differs from its number of characters.
 
 Usage:  python extensions/anchoring/tests/generate_vectors.py            write vectors.json
         python extensions/anchoring/tests/generate_vectors.py --check    exit 1 if vectors.json differs
@@ -30,16 +36,17 @@ from asn1crypto import algos, cms, core, tsp
 from asn1crypto import x509 as asn1_x509
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE / "vectors.json"
 
-PROFILE, VERSION = "dps-anchoring", "0.1.0"
+PROFILE, VERSION = "dps-anchoring", "0.2.0"
 CHAIN = "urn:example:chain:issuer-1"
 CHAIN_2 = "urn:example:chain:issuer-2"
+CHAIN_ACCENTED = "cha\u00eene-\u00e9metteur-1"  # "chaîne-émetteur-1", precomposed: 17 characters, 19 UTF-8 bytes
 SEED_PREFIX = "dps-anchoring 0.1.0 test key "
 P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 TSA_POLICY_OID = "2.999.1"  # an OID under the arc reserved for examples
@@ -114,6 +121,77 @@ def p256_key(name):
     return ec.derive_private_key(int.from_bytes(seed(name), "big") % (P256_N - 1) + 1, ec.SECP256R1())
 
 
+# RFC 9500, section 2.1, RSA-2048 key "testRSA2048": a PUBLISHED TEST KEY, never a real key. The parameters are those
+# the RFC prints, in its order and under its names (u is the CRT coefficient q^-1 mod p, PKCS#1's qInv; exponent1 and
+# exponent2 are d mod (p - 1) and d mod (q - 1), PKCS#1's dP and dQ). rsa_key() reconstructs the private key from
+# them and checks that its public key is the RFC's.
+RFC9500_TESTRSA2048 = {
+    "n": (
+        "b0f9e81943a7ae9892aade17ca7c40f8744fed2f8148e6c8eaa27b7d001548fb5192ab28b56c5060b118ccd131e59487"
+        "4c6ca989b56c27296f09fb93a034df32e97c6ff0998cfd8e6f42dda58acd1fa97986f144f3d154d67650175e6854b3a9"
+        "52003bc06887b8455ac2b19f7b2f76504ebc98ec945571b07892150ddc6a74ca0fbcd35497ce81534daf9418844b13ae"
+        "a31f9d5a6b9557bbdf619efd4e887f2d42b8dd8bc987eae1bf89cab85ee21e356305df6c07a8838e3ef41c595dcce43d"
+        "afc49123ef4d8abba93d3905e4028d7ba91484a27596e07b4b6ed992f077b524d3dcfe7ddd5549be7cce8da035cfa0b3"
+        "fb8f9e46f732b2a86b460165c08f5313"
+    ),
+    "e": (
+        "010001"
+    ),
+    "d": (
+        "41188b20cfdbdbc2cf1ffe752dcbaa723906352e2615d49dce80597fcf0a05403bef00fa065182f72decfb596f4b0ce8"
+        "ff5970baf07a89a519ecc816b2f4ffac5069af1b06bfef7bf6bcd79e4e81c8c5a3a7d9130dc3cfbadae5f6d288f9aee3"
+        "f6ff92fae0f81af597bec96ae9fab9402cd5fe41f705bebdb47bb736d3fe6c5a51e0e20732a97b5e46c1cbdb26d74854"
+        "c6b6604aed463735ff9076046557caf949bf448895c20432c1e09c014ea75660434f1a0f3be294babc5d530e6a10213f"
+        "53b60375fc84a7573f2af1215584f5b4bda6d4e8f9e17a78d97e77b86da4a1846475318a7a10a561014effa23a81ec56"
+        "e9e4109def8cb3f797223f7d8d0d4351"
+    ),
+    "p": (
+        "dd105702382f232b3681f53791e22617c7bf4e9acb81ed48daf6d6995da3eab642839aff012d2ea628b90af279fd3e6f"
+        "7c93cd80f072f01ff2443b3ee8f24ed469a79613a41bd24020f92fd11059bd1d0f301b5ba7a9d3637ca8d65c1a981541"
+        "7d8eab734b0b4f3a2c661d9a1a82f3ac734c40530669ab8e473045a58e65539d"
+    ),
+    "q": (
+        "ccf1e5bb90c8e9781ea75bebf10bc252e11eb023a0260f1887552a56863f4a6421e8c600bf523d6cb1b0adbdd65bfee4"
+        "a88a037e3d1a415e5bb95648da5a0ca26b54f4a63948522c3d5f89b94a72efff95134d5940ce45758f30898090895658"
+        "8eef575b3e4bc4c368cfe813ee9c252c2b02e0df91f1aa01938d38685d60ba6f"
+    ),
+    "exponent1": (
+        "09ed54eaed98f84c557b4a86bf4f578493dcbc6be91da189370404a9087276f4ce51d8a100ed857dc2b0649474f3f15c"
+        "d24c54db287110e56e5cb008682f9168aa81f31458b7431ecc1c44906fda87ca894710c371e9076c1d49fbae51276934"
+        "f2ad787789f42d0fa0b4c939855d4212096f70280a4eae7c8a27d9c8d0772e65"
+    ),
+    "exponent2": (
+        "8cb6857a7bd5465f80047e9b87bc002731840581e0626139012a5b505f0a33847eb7b8c3289949ad486f3b4b3d539ab5"
+        "da763021cbc82c1ba234a5668ded0801b859f343f1ce9304e6faa2b002cad9b78cde5cdc2c1fb4171c42421670a6ab0f"
+        "50cc4a194eb36d1c91e935ba01b959d8728b9e64426b3fc3a7506deb5239a8a7"
+    ),
+    "u": (
+        "0a81d8a618314a803af61c06711f2c39b266ff414d53476d1da52a4318aafe4b96f0da07155f8a5134dab88ee29e8168"
+        "076fcd78ca791ac63442a81cd0693927d808e335e8d8cbf2121907509a57759b4f9a18fa3a7b333779edde7a459384f8"
+        "444adaecffec95fd552b0cfcb6c7f692626dde1ef268a40d2f67b5c8aa387ff7"
+    ),
+}
+RFC9500_TESTRSA2048_NAME = "testRSA2048"
+
+
+def rsa_key():
+    """The RFC 9500 test key, reconstructed from its published parameters."""
+    k = {name: int(value, 16) for name, value in RFC9500_TESTRSA2048.items()}
+    public = rsa.RSAPublicNumbers(e=k["e"], n=k["n"])
+    key = rsa.RSAPrivateNumbers(p=k["p"], q=k["q"], d=k["d"], dmp1=k["exponent1"], dmq1=k["exponent2"], iqmp=k["u"],
+                                public_numbers=public).private_key()
+    if key.key_size != 2048 or key.public_key().public_numbers() != public:
+        raise ValueError("the RSA test key does not reconstruct to the published public key")
+    return key
+
+
+def sign_der(key, data):
+    """A deterministic signature over data: ECDSA P-256 with RFC 6979 nonces, or RSA PKCS#1 v1.5, with SHA-256."""
+    if isinstance(key, rsa.RSAPrivateKey):
+        return key.sign(data, padding.PKCS1v15(), hashes.SHA256())
+    return key.sign(data, ec.ECDSA(hashes.SHA256(), deterministic_signing=True))
+
+
 def raw_public(key):
     return key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
 
@@ -131,6 +209,16 @@ def lp(data):
 
 def signed_bytes(fields):
     return MAGIC + b"".join(lp(f) for f in fields)
+
+
+TEXT_FIELDS = (0, 1, 2, 3, 4, 7)  # the checkpoint's text fields, by position in its field order
+
+
+def signed_bytes_counting_characters(fields):
+    """A wrong encoder, to show what it gives (TEST ONLY): each text field's prefix counts its characters, not its
+    UTF-8 bytes. For ASCII text the two are the same."""
+    return MAGIC + b"".join((len(f.decode("utf-8")) if i in TEXT_FIELDS else len(f)).to_bytes(4, "big") + f
+                            for i, f in enumerate(fields))
 
 
 def checkpoint_fields(cp, profile=PROFILE, version=VERSION, assertion="checkpoint", key_ref=None):
@@ -206,7 +294,8 @@ def build_exports(seal, links):
 # ---------------------------------------------------------------- time-stamping authorities and tokens
 
 def tsa_certificate(key, number, serial):
-    """A self-signed TSA certificate (TEST ONLY): extendedKeyUsage id-kp-timeStamping, critical (RFC 3161 2.3)."""
+    """A self-signed TSA certificate (TEST ONLY): extendedKeyUsage id-kp-timeStamping, critical (RFC 3161 2.3). Signed
+    with ECDSA (RFC 6979 nonces) or RSA PKCS#1 v1.5, with SHA-256: deterministic either way."""
     name = x509.Name([
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Example time-stamping authority (test only)"),
         x509.NameAttribute(NameOID.COMMON_NAME, f"Example TSA {number} (test only)"),
@@ -224,15 +313,23 @@ def tsa_certificate(key, number, serial):
                                      crl_sign=False, encipher_only=False, decipher_only=False), critical=True)
         .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.TIME_STAMPING]), critical=True)
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
-        .sign(key, hashes.SHA256(), ecdsa_deterministic=True)
     )
+    if isinstance(key, rsa.RSAPrivateKey):
+        cert = cert.sign(key, hashes.SHA256())
+    else:
+        cert = cert.sign(key, hashes.SHA256(), ecdsa_deterministic=True)
     return cert.public_bytes(serialization.Encoding.DER)
 
 
 def make_token(key, cert_der, imprint_of, gen_time, serial, *, hash_algorithm="sha256", accuracy_seconds=None,
-               cert_id_of=None, with_cert_id=True, content_type="tst_info", signature_algorithm="sha256_ecdsa",
-               signers=1, hash_label=None, attr_content_type=None, sid_cert_der=None):
-    """An RFC 3161 TimeStampToken: CMS SignedData over a TSTInfo, signed with ECDSA P-256 and SHA-256 (RFC 6979)."""
+               cert_id_of=None, with_cert_id=True, content_type="tst_info", signature_algorithm=None,
+               signers=1, hash_label=None, attr_content_type=None, sid_cert_der=None, cert_id_hash="sha256",
+               cert_id_values=1, gen_time_text=None, accuracy_millis=None):
+    """An RFC 3161 TimeStampToken: CMS SignedData over a TSTInfo, signed with ECDSA P-256 (RFC 6979) or RSA PKCS#1
+    v1.5, with SHA-256. signature_algorithm labels the signature; without it, the label fits the key. gen_time_text,
+    when given, is written as the genTime's exact characters (to make one that is not in UTC)."""
+    if signature_algorithm is None:
+        signature_algorithm = "sha256_rsa" if isinstance(key, rsa.RSAPrivateKey) else "sha256_ecdsa"
     cert = asn1_x509.Certificate.load(cert_der)
     sid_cert = asn1_x509.Certificate.load(sid_cert_der or cert_der)
     hashed = hashlib.new(hash_algorithm, imprint_of).digest()
@@ -241,20 +338,25 @@ def make_token(key, cert_der, imprint_of, gen_time, serial, *, hash_algorithm="s
         "policy": TSA_POLICY_OID,
         "message_imprint": {"hash_algorithm": {"algorithm": hash_label or hash_algorithm}, "hashed_message": hashed},
         "serial_number": serial,
-        "gen_time": gen_time,
+        "gen_time": gen_time if gen_time_text is None else core.GeneralizedTime.load(
+            b"\x18" + bytes([len(gen_time_text)]) + gen_time_text.encode("ascii")),
     }
-    if accuracy_seconds is not None:
-        info["accuracy"] = {"seconds": accuracy_seconds}
+    if accuracy_seconds is not None or accuracy_millis is not None:
+        info["accuracy"] = {k: x for k, x in (("seconds", accuracy_seconds), ("millis", accuracy_millis))
+                            if x is not None}
     econtent = tsp.TSTInfo(info).dump()
     attrs = [
         cms.CMSAttribute({"type": "content_type", "values": [attr_content_type or content_type]}),
         cms.CMSAttribute({"type": "message_digest", "values": [sha256(econtent)]}),
     ]
     if with_cert_id:
-        attrs.append(cms.CMSAttribute({"type": "signing_certificate_v2", "values": [
-            {"certs": [{"cert_hash": sha256(cert_id_of or cert_der)}]}]}))
+        cert_id = {"cert_hash": hashlib.new(cert_id_hash, cert_id_of or cert_der).digest()}
+        if cert_id_hash != "sha256":  # SHA-256 is the default, which DER leaves out
+            cert_id = {"hash_algorithm": {"algorithm": cert_id_hash}, **cert_id}
+        attrs.append(cms.CMSAttribute({"type": "signing_certificate_v2",
+                                       "values": [{"certs": [cert_id]}] * cert_id_values}))
     signed_attrs = cms.CMSAttributes(sorted(attrs, key=lambda a: a.dump()))  # DER: a SET OF is sorted
-    signature = key.sign(signed_attrs.dump(), ec.ECDSA(hashes.SHA256(), deterministic_signing=True))
+    signature = sign_der(key, signed_attrs.dump())
     signer = cms.SignerInfo({
         "version": "v1",
         "sid": cms.SignerIdentifier({"issuer_and_serial_number": cms.IssuerAndSerialNumber({
@@ -287,13 +389,16 @@ def flip_last_byte(data):
 
 # ---------------------------------------------------------------- witness checkpoints
 
-def make_checkpoint(keys, key_name, chain_id, count, head_link, checkpoint_time, presented=None, signed_as=None):
+def make_checkpoint(keys, key_name, chain_id, count, head_link, checkpoint_time, presented=None, signed_as=None,
+                    counting_characters=False):
     """A checkpoint signed by a witness key. presented changes what the object says after signing; signed_as
-    changes what the key signed (another profile, version, assertion type or key reference)."""
+    changes what the key signed (another profile, version, assertion type or key reference); counting_characters
+    signs the bytes of an encoder whose length prefixes count characters instead of bytes."""
     cp = {"profile": PROFILE, "profile_version": VERSION, "assertion": "checkpoint", "chain_id": chain_id,
           "count": count, "head_link": head_link, "checkpoint_time": checkpoint_time,
           "signature": {"algorithm": "Ed25519", "key_ref": key_name}}
-    made_over = signed_bytes(checkpoint_fields(cp, **(signed_as or {})))
+    fields = checkpoint_fields(cp, **(signed_as or {}))
+    made_over = (signed_bytes_counting_characters if counting_characters else signed_bytes)(fields)
     cp["signature"]["value_b64"] = b64(keys[key_name].sign(made_over))
     for k, v in (presented or {}).items():
         if k in ("key_ref", "algorithm"):
@@ -328,12 +433,18 @@ def build():
         point = ec_keys[n].public_key().public_bytes(serialization.Encoding.X962,
                                                      serialization.PublicFormat.UncompressedPoint)
         test_keys[n] = {"algorithm": "ECDSA P-256", "seed_text": SEED_PREFIX + n, "public_key_hex": point.hex()}
+    rsa_tsa = rsa_key()
+    test_keys[RFC9500_TESTRSA2048_NAME] = {
+        "algorithm": "RSA-2048", "published_in": "RFC 9500, section 2.1", "name": RFC9500_TESTRSA2048_NAME,
+        "modulus_hex": RFC9500_TESTRSA2048["n"], "public_exponent_hex": RFC9500_TESTRSA2048["e"]}
 
     certs = {
         "tsa-example-1": tsa_certificate(ec_keys["tsa-example-1"], 1, 0x0A11),
         "tsa-example-2": tsa_certificate(ec_keys["tsa-example-2"], 2, 0x0A12),
         # The attacker's certificate copies the name and serial number of TSA 1, with the attacker's own key.
         "attacker-1": tsa_certificate(ec_keys["attacker-1"], 1, 0x0A11),
+        # The RSA authority: RFC 9500's test key, in a self-signed certificate (sha256WithRSAEncryption).
+        RFC9500_TESTRSA2048_NAME: tsa_certificate(rsa_tsa, 3, 0x0A13),
     }
     certificates = {n: {"certificate_b64": b64(d), "sha256": sha256(d).hex()} for n, d in certs.items()}
 
@@ -347,12 +458,12 @@ def build():
     cp("cp_a_count_2", "witness-a-1, the first two entries", "witness-a-1", CHAIN, 2, "L1", "2026-09-26T12:00:00Z")
     cp("cp_a_count_4", "witness-a-1, the four entries of the extended export", "witness-a-1", CHAIN, 4, "L3",
        "2026-09-29T12:00:00Z")
-    cp("cp_a_moved_to_mirror", "cp_a's signature presented under witness-a-mirror, a second reference to the same "
+    cp("cp_a_moved_to_mirror", "cp_a's signature presented under witness-a-mirror, another reference to the same "
        "key", "witness-a-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z", presented={"key_ref": "witness-a-mirror"})
     cp("cp_a_other_profile", "the key signed the same fields under profile dps-portable-verification",
        "witness-a-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z", signed_as={"profile": "dps-portable-verification"})
-    cp("cp_a_other_version", "the key signed the same fields under profile_version 0.2.0", "witness-a-1", CHAIN, 3,
-       "L2", "2026-09-27T12:00:00Z", signed_as={"version": "0.2.0"})
+    cp("cp_a_other_version", "the key signed the same fields under profile_version 0.1.0, the earlier version",
+       "witness-a-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z", signed_as={"version": "0.1.0"})
     cp("cp_a_other_type", "the key signed the same fields under assertion type seal", "witness-a-1", CHAIN, 3, "L2",
        "2026-09-27T12:00:00Z", signed_as={"assertion": "seal"})
     cp("cp_a_count_changed", "signed with count 3, presented with count 2", "witness-a-1", CHAIN, 3, "L2",
@@ -379,6 +490,17 @@ def build():
     cp("cp_x", "witness-x-1, a key the policy does not list", "witness-x-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z")
     cp("cp_org", "issuer-seal-1, the issuer's own key (role organisation)", "issuer-seal-1", CHAIN, 3, "L2",
        "2026-09-27T12:00:00Z")
+    cp("cp_org_as_witness", "the issuer's own key, signing under issuer-witness-1, a second reference a policy may "
+       "give it", "issuer-seal-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z", presented={"key_ref": "issuer-witness-1"},
+       signed_as={"key_ref": "issuer-witness-1"})
+    cp("cp_a_feb30", "witness-a-1, correctly signed, stating 2026-02-30, a date that does not exist", "witness-a-1",
+       CHAIN, 3, "L2", "2026-02-30T12:00:00Z")
+    cp("cp_a_leap_second", "witness-a-1, correctly signed, stating a leap second", "witness-a-1", CHAIN, 3, "L2",
+       "2026-12-31T23:59:60Z")
+    cp("cp_accented", "witness-a-1, the three entries of the full export, for a chain identifier that is not ASCII",
+       "witness-a-1", CHAIN_ACCENTED, 3, "L2", "2026-09-27T12:00:00Z")
+    cp("cp_accented_char_count", "cp_accented, signed over bytes whose length prefixes count characters instead of "
+       "bytes", "witness-a-1", CHAIN_ACCENTED, 3, "L2", "2026-09-27T12:00:00Z", counting_characters=True)
     bad = copy.deepcopy(checkpoints["cp_a"])
     bad["about"] = "cp_a with the last byte of its signature changed"
     sig = base64.b64decode(bad["checkpoint"]["signature"]["value_b64"])
@@ -389,6 +511,7 @@ def build():
         return base64.b64decode(checkpoints[name]["checkpoint"]["signature"]["value_b64"])
 
     tsa1 = (ec_keys["tsa-example-1"], certs["tsa-example-1"])
+    tsa_rsa = (rsa_tsa, certs[RFC9500_TESTRSA2048_NAME])
     tokens = {}
 
     def tok(name, about, subject_bytes, signer, gen_time, serial, **kw):
@@ -442,6 +565,32 @@ def build():
         "2026-09-25T11:05:00Z", 123, sid_cert_der=certs["tsa-example-2"])
     tok("seal_r0_two_signers", "TSA 1 over the seal of R0, with its SignerInfo given twice", r0, tsa1,
         "2026-09-25T11:05:00Z", 120, signers=2)
+    tok("seal_r0_cert_id_sha512", "TSA 1 over the seal of R0, its ESSCertIDv2 made with SHA-512", r0, tsa1,
+        "2026-09-25T11:05:00Z", 124, cert_id_hash="sha512")
+    tok("seal_r0_cert_id_no_value", "TSA 1 over the seal of R0, its signingCertificateV2 attribute with no value", r0,
+        tsa1, "2026-09-25T11:05:00Z", 125, cert_id_values=0)
+    tok("seal_r0_not_utc", "TSA 1 over the seal of R0, its genTime written with no time zone (20260925110500)", r0,
+        tsa1, "2026-09-25T11:05:00Z", 126, gen_time_text="20260925110500")
+    tok("seal_r0_accuracy_negative", "TSA 1 over the seal of R0, with an accuracy of -60 s", r0, tsa1,
+        "2026-09-25T11:05:00Z", 127, accuracy_seconds=-60)
+    tok("seal_r0_accuracy_too_large", "TSA 1 over the seal of R0, with an accuracy of 10^12 s, past the year 9999",
+        r0, tsa1, "2026-09-25T11:05:00Z", 128, accuracy_seconds=10 ** 12)
+    tok("seal_r0_accuracy_millis", "TSA 1 over the seal of R0, with an accuracy of 1000 millis (RFC 3161 allows 1 "
+        "to 999)", r0, tsa1, "2026-09-25T11:05:00Z", 130, accuracy_millis=1000)
+    tok("sig_cp_a_feb30", "TSA 1 over cp_a_feb30's signature value", sig_of("cp_a_feb30"), tsa1,
+        "2026-09-27T12:05:00Z", 129)
+    tok("seal_r0_sha384_label", "TSA 1 over the seal of R0, its signatureAlgorithm labelled ecdsa-with-SHA384", r0,
+        tsa1, "2026-09-25T11:05:00Z", 131, signature_algorithm="sha384_ecdsa")
+    # The RSA authority (RFC 9500's testRSA2048), RSA PKCS#1 v1.5 with SHA-256.
+    good_rsa = tok("seal_r0_rsa", "the RSA authority over the seal of R0", r0, tsa_rsa, "2026-09-25T11:05:00Z", 301)
+    tok("seal_r1_rsa", "the RSA authority over the seal of R1", bytes.fromhex(seal["R1"]), tsa_rsa,
+        "2026-09-26T10:05:00Z", 302)
+    tok("seal_r0_rsa_pss_label", "the RSA authority over the seal of R0, its PKCS#1 v1.5 signature labelled "
+        "RSASSA-PSS", r0, tsa_rsa, "2026-09-25T11:05:00Z", 303, signature_algorithm="rsassa_pss")
+    tok("seal_r0_rsa_ecdsa_label", "the RSA authority over the seal of R0, its signature labelled ecdsa-with-SHA256",
+        r0, tsa_rsa, "2026-09-25T11:05:00Z", 304, signature_algorithm="sha256_ecdsa")
+    tok("seal_r0_rsa_no_cert_id", "the RSA authority over the seal of R0, with no signingCertificateV2 attribute", r0,
+        tsa_rsa, "2026-09-25T11:05:00Z", 305, with_cert_id=False)
     # Changed after signing, without re-signing.
     _, signature = make_token(tsa1[0], tsa1[1], r0, when("2026-09-25T11:05:00Z"), 101)
     tokens["seal_r0_bad_signature"] = {"about": "seal_r0 with the last byte of its signature changed",
@@ -452,6 +601,11 @@ def build():
                                    "token_b64": b64(replace_once(good, b"20260925110500Z", b"20260924110500Z"))}
     tokens["not_a_token"] = {"about": "bytes that are not a time-stamp token", "imprint_of_hex": r0.hex(),
                              "token_b64": b64(b"not a time-stamp token")}
+    _, rsa_signature = make_token(tsa_rsa[0], tsa_rsa[1], r0, when("2026-09-25T11:05:00Z"), 301)
+    tokens["seal_r0_rsa_bad_signature"] = {"about": "seal_r0_rsa with the last byte of its signature changed",
+                                           "imprint_of_hex": r0.hex(),
+                                           "token_b64": b64(replace_once(good_rsa, rsa_signature,
+                                                                         flip_last_byte(rsa_signature)))}
 
     policy = {
         "profile": "dps-anchoring-trust-policy",
@@ -459,6 +613,10 @@ def build():
         "policy_ref": "urn:example:trust-policy:verifier-1",
         "tsas": [{"tsa_ref": "tsa-example-1", "holder": "Example time-stamping authority 1 (test only)",
                   "certificate_b64": certificates["tsa-example-1"]["certificate_b64"],
+                  "not_before": "2026-01-01T00:00:00Z", "not_after": "2027-12-31T23:59:59Z"},
+                 {"tsa_ref": "tsa-rsa-1", "holder": "Example time-stamping authority 3 (test only; its key is RFC "
+                                                    "9500's testRSA2048)",
+                  "certificate_b64": certificates[RFC9500_TESTRSA2048_NAME]["certificate_b64"],
                   "not_before": "2026-01-01T00:00:00Z", "not_after": "2027-12-31T23:59:59Z"}],
         "keys": [],
         "checkpoint_sources": [],
@@ -471,9 +629,8 @@ def build():
             entry["revoked_at"], entry["revocation_reason"] = revoked
         policy["keys"].append(entry)
 
+    # One public key has one key reference, one holder and one role: the check refuses a policy that breaks this.
     key("witness-a-1", "witness-a-1", "Example witness A (test only)", "witness", "2026-09-01T00:00:00Z",
-        "2027-08-31T23:59:59Z")
-    key("witness-a-mirror", "witness-a-1", "Example witness A (test only)", "witness", "2026-09-01T00:00:00Z",
         "2027-08-31T23:59:59Z")
     key("witness-b-1", "witness-b-1", "Example witness B (test only)", "witness", "2026-01-01T00:00:00Z",
         "2026-12-31T23:59:59Z", ("2026-09-30T00:00:00Z", "superseded"))
@@ -485,15 +642,15 @@ def build():
         "2026-09-15T23:59:59Z")
     key("issuer-seal-1", "issuer-seal-1", "Example issuer (test only)", "organisation", "2026-01-01T00:00:00Z",
         "2027-12-31T23:59:59Z")
-    for ref, holder, refs in (
-            ("witness-a", "Example witness A (test only)", ["witness-a-1", "witness-a-mirror"]),
-            ("witness-b", "Example witness B (test only)", ["witness-b-1", "witness-b-2"]),
-            ("witness-c", "Example witness C (test only)", ["witness-c-1"]),
-            ("witness-d", "Example witness D (test only)", ["witness-d-1"]),
+    for ref, holder, refs, chains in (
+            ("witness-a", "Example witness A (test only)", ["witness-a-1"], [CHAIN, CHAIN_ACCENTED]),
+            ("witness-b", "Example witness B (test only)", ["witness-b-1", "witness-b-2"], [CHAIN]),
+            ("witness-c", "Example witness C (test only)", ["witness-c-1"], [CHAIN]),
+            ("witness-d", "Example witness D (test only)", ["witness-d-1"], [CHAIN]),
             # Misconfigured on purpose: the issuer's own key listed for a checkpoint source. The role check stops it.
-            ("witness-f", "Example issuer (test only)", ["issuer-seal-1"])):
+            ("witness-f", "Example issuer (test only)", ["issuer-seal-1"], [CHAIN])):
         policy["checkpoint_sources"].append({"source_ref": ref, "kind": "witness", "holder": holder,
-                                             "chain_ids": [CHAIN], "key_refs": refs})
+                                             "chain_ids": chains, "key_refs": refs})
     policy["checkpoint_sources"].append({"source_ref": "log-e", "kind": "transparency_log",
                                          "holder": "Example log E (test only)", "chain_ids": [CHAIN]})
 
@@ -527,6 +684,9 @@ def build():
         "sig_cp_c_at_revocation": timestamp(subject_signature("cp_c"), "sig_cp_c_at_revocation"),
         "link_1_early": timestamp({"kind": "chain_link", "chain_id": CHAIN, "sequence": 1, "value_hex": links["L1"]},
                                   "link_1_early"),
+        "sig_cp_a_feb30": timestamp(subject_signature("cp_a_feb30"), "sig_cp_a_feb30"),
+        "seal_r0_rsa": timestamp({"kind": "seal", "decision_id": "DR-2099-001", "value_hex": seal["R0"]}, "seal_r0_rsa",
+                                 tsa_ref="tsa-rsa-1"),
     }
     context = {
         "chain_id": CHAIN,
@@ -567,6 +727,7 @@ def build():
         "profile": "dps-anchoring-report",
         "profile_version": VERSION,
         "trust_policy_ref": policy["policy_ref"],
+        "trust_policy": {"status": "verified"},
         "attachment_digest": sha256(compact(attachment)).hex(),
         "export_digest": sha256(compact(exports["full"])).hex(),
         "export_entry_count": 3,
@@ -594,13 +755,16 @@ def build():
     }
 
     return {
-        "about": "Generated by generate_vectors.py; do not edit by hand. TEST KEYS ONLY: every key is derived from "
-                 "its seed_text (seed = SHA-256 of the text; Ed25519: the seed is the private key; ECDSA P-256: the "
-                 "scalar is the seed as a big-endian integer mod (n - 1), plus 1). Records R0 to R2 and links L0 to "
+        "about": "Generated by generate_vectors.py; do not edit by hand. TEST KEYS ONLY: every key but one is derived "
+                 "from its seed_text (seed = SHA-256 of the text; Ed25519: the seed is the private key; ECDSA P-256: "
+                 "the scalar is the seed as a big-endian integer mod (n - 1), plus 1); the RSA key is the 2048-bit "
+                 "test key RFC 9500, section 2.1, publishes as testRSA2048, given here by its public modulus and "
+                 "exponent. Records R0 to R2 and links L0 to "
                  "L2 are those of the portable verification cases. Exports are portable verification 0.1.0 exports. "
                  "Each checkpoint names the test key it was signed with (signed_with) and gives signed_bytes_hex, "
                  "the bytes a verifier builds from it under the shared rule, and, where the key signed something "
-                 "else, signature_made_over_hex. Each token gives "
+                 "else, signature_made_over_hex. cp_accented's chain_id is not ASCII: its length prefix counts 19 "
+                 "UTF-8 bytes, not 17 characters. Each token gives "
                  "imprint_of_hex, the bytes its messageImprint is the SHA-256 of. A document's bytes as received "
                  "(for attachment_digest and export_digest) are its JSON with no whitespace, in UTF-8.",
         "test_keys": test_keys,

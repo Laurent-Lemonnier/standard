@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.1.0/trust-policy.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.1.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.1.0. Binds only an implementation that says it uses this extension.",
+  "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.2.0/trust-policy.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.1.0. Binds only an implementation that says it uses this extension.",
   "title": "Anchoring trust policy",
-  "description": "The verifier's own configuration: the time-stamping authorities it trusts, by pinned certificate; the keys it trusts, each with its holder, role, validity and, if revoked, the time and reason; and the checkpoint sources it uses, for which chains. Nothing here comes from an export or an attachment.",
+  "description": "The verifier's own configuration: the time-stamping authorities it trusts, by pinned certificate; the keys it trusts, each with its holder, role, validity and, if revoked, the time and reason; and the checkpoint sources it uses, for which chains. Nothing here comes from an export or an attachment. Each reference names one entry, and one public key has one key reference, one holder and one role. JSON Schema cannot compare entries: a verifier refuses a policy that breaks this. A time or a pinned certificate it cannot read fails the check that relies on that entry.",
   "type": "object",
   "additionalProperties": false,
   "required": ["profile", "profile_version", "policy_ref", "tsas", "keys", "checkpoint_sources"],
   "properties": {
     "profile": {"const": "dps-anchoring-trust-policy"},
-    "profile_version": {"const": "0.1.0"},
+    "profile_version": {"const": "0.2.0"},
     "policy_ref": {"type": "string", "minLength": 1, "description": "The reference a report gives as trust_policy_ref."},
     "tsas": {"type": "array", "items": {"$ref": "#/$defs/tsa"}},
     "keys": {"type": "array", "items": {"$ref": "#/$defs/key"}},
@@ -17,7 +17,7 @@
   },
   "$defs": {
     "ref": {"type": "string", "minLength": 1, "maxLength": 256},
-    "time": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "time": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", "description": "A real UTC time, to the second: a date that exists, with no leap second."},
     "revocation": {
       "description": "A revoked key or authority: revoked_at and revocation_reason are given together. superseded: replaced, not suspected of misuse. compromised: anyone may hold it since an unknown time.",
       "properties": {
@@ -51,7 +51,7 @@
       }
     },
     "key": {
-      "description": "One key. A key reference names one key; a new key gets a new reference.",
+      "description": "One key. A key reference names one key; a new key gets a new reference. One public key has one key reference, one holder and one role, so it is listed once. A key may also carry what the signatures profile needs for a person's or an organisation's key (identity_source_ref, webauthn, certificate_b64), so that one policy holds every key; anchoring ignores them, and the signatures profile says when they are required.",
       "type": "object",
       "additionalProperties": false,
       "required": ["key_ref", "holder", "role", "algorithm", "public_key_hex", "not_before", "not_after"],
@@ -74,7 +74,24 @@
         "not_before": {"$ref": "#/$defs/time"},
         "not_after": {"$ref": "#/$defs/time"},
         "revoked_at": true,
-        "revocation_reason": true
+        "revocation_reason": true,
+        "identity_source_ref": {"$ref": "#/$defs/ref", "description": "The signatures profile: for a person's key, the source the verifier binds the key to its holder with. Ignored by anchoring."},
+        "webauthn": {
+          "description": "The signatures profile: for a passkey, the relying party identifier and the origins the client data may state. Ignored by anchoring.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rp_id", "origins"],
+          "properties": {
+            "rp_id": {"type": "string", "minLength": 1, "maxLength": 253},
+            "origins": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9+.-]*://[^/\\s]+$"}}
+          }
+        },
+        "certificate_b64": {
+          "type": "string",
+          "minLength": 4,
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+          "description": "The signatures profile: for an organisation's key, a certificate the verifier pins for it, in DER and padded base64. Ignored by anchoring."
+        }
       }
     },
     "checkpoint_source": {
@@ -85,7 +102,7 @@
         "source_ref": {"$ref": "#/$defs/ref"},
         "kind": {
           "enum": ["witness", "transparency_log", "third_party"],
-          "description": "witness: gives checkpoints signed under the shared rule by one of key_refs. The other kinds give the same values by their own means; 0.1.0 defines no format for them."
+          "description": "witness: gives checkpoints signed under the shared rule by one of key_refs. The other kinds give the same values by their own means; 0.2.0 defines no format for them."
         },
         "holder": {"type": "string", "minLength": 1},
         "chain_ids": {

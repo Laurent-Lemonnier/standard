@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.1.0/checkpoint.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.1.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.1.0. Binds only an implementation that says it uses this extension.",
+  "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.2.0/checkpoint.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.1.0. Binds only an implementation that says it uses this extension.",
   "title": "Witness-signed checkpoint",
   "description": "A chain fixed at one point (its identifier, count, head link and time), signed by a witness under the shared signed-bytes rule with assertion type checkpoint. It is independent only when the verifier obtains it from a source it configured, outside the export; a copy found in the export is never independent. The witness sees digests only.",
   "type": "object",
@@ -9,22 +9,22 @@
   "required": ["profile", "profile_version", "assertion", "chain_id", "count", "head_link", "checkpoint_time", "signature"],
   "properties": {
     "profile": {"const": "dps-anchoring"},
-    "profile_version": {"const": "0.1.0"},
+    "profile_version": {"const": "0.2.0"},
     "assertion": {"const": "checkpoint"},
     "chain_id": {"type": "string", "minLength": 1, "maxLength": 256},
-    "count": {"type": "integer", "minimum": 1, "description": "The number of entries the checkpoint fixes: link(count - 1) is the head link."},
+    "count": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "The number of entries the checkpoint fixes: link(count - 1) is the head link. Written as a JSON integer (digits only, with no fraction or exponent), and at most 2^53 - 1: JSON readers agree exactly on every integer up to that (RFC 8259 section 6). JSON Schema also accepts 3.0 as an integer; a verifier reports a count written so as failed."},
     "head_link": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "link(count - 1), as portable verification defines the chain, in lowercase hex."},
     "checkpoint_time": {
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
-      "description": "The time the witness states, in UTC, to the second, in exactly this form, because it is signed as text. It is the witness's statement, not independent time."
+      "description": "The time the witness states, in UTC, to the second, in exactly this form, because it is signed as text. It is a real UTC time: a date that exists, with no leap second. The pattern cannot reject every date that does not exist, so a verifier reports such a time as failed. It is the witness's statement, not independent time."
     },
     "signature": {
       "type": "object",
       "additionalProperties": false,
       "required": ["algorithm", "key_ref", "value_b64"],
       "properties": {
-        "algorithm": {"type": "string", "minLength": 1, "description": "Ed25519 in 0.1.0."},
+        "algorithm": {"type": "string", "minLength": 1, "description": "Ed25519 in 0.2.0."},
         "key_ref": {
           "type": "string",
           "minLength": 1,
