@@ -91,5 +91,5 @@ If you find a problem that could let someone forge or alter records undetected, 
 
 ## Credit
 
-- We credit what you found or proposed: in the pull request history, in the release notes, and in a contributors list.
+- We credit what you found or proposed: in the pull request history, in the release notes, and in the [contributors list](CONTRIBUTORS.md).
 - Contributing does not make anyone an adopter, partner or endorser of the Standard.

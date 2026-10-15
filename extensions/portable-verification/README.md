@@ -92,4 +92,4 @@ The digest and chain values are written in `cases.json`, so they can serve as si
 
 ## Credit
 
-Proposed by Laurent Lemonnier, iSoluce (CR-005). Prepared with AI assistance and reviewed by Laurent. The shape of this extension was agreed in issue #21.
+Author: Laurent Lemonnier, iSoluce (CR-005). Prepared with AI assistance and reviewed by Laurent. The shape of this extension was agreed in issue #21.

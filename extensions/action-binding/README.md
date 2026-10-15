@@ -102,4 +102,4 @@ The cases include no signature. A signature suite and signature vectors across l
 
 ## Credit
 
-Proposed by Laurent Lemonnier, iSoluce (CR-004). Prepared with AI assistance and reviewed by Laurent. The shape of this extension was agreed in issue #21.
+Author: Laurent Lemonnier, iSoluce (CR-004). Prepared with AI assistance and reviewed by Laurent. The shape of this extension was agreed in issue #21.
