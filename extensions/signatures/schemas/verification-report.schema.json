@@ -106,7 +106,7 @@
         "status": {"$ref": "#/$defs/status"},
         "checked_against": {"enum": ["action_binding_attachment", "export_entry", "export"]},
         "covers_affirmation_record": {"type": "boolean", "description": "A person's affirmation only: whether the sealed bytes, and so the signed digest, include affirmation_record, as the export states."},
-        "embedded_copy": {"$ref": "#/$defs/status", "description": "A seal of an attachment only: the copy of the seal the attachment carries as issuer_signature agrees with the seal (verified), or there is none (not_checked)."},
+        "embedded_copy": {"$ref": "#/$defs/status", "description": "A seal of an attachment only: the copy of the seal the attachment carries as issuer_signature agrees with the seal in every member, algorithm, key reference, signed-bytes reference and value (verified), or there is none (not_checked)."},
         "findings": {"$ref": "#/$defs/findings"}
       },
       "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
@@ -147,7 +147,7 @@
       ]
     },
     "identity": {
-      "description": "The binding of the key to a person, from the verifier's trust policy and the source it names there (identity_source_ref, which this profile requires for a person's key; without one the identity fails), compared with the actor the issuer names. It is reported apart from the signature check and never rests on the signature, on the issuer's statement or on an authenticator flag.",
+      "description": "The binding of the key to a person, from the verifier's trust policy and the source it names there (identity_source_ref, which this profile requires for a person's key; without one the identity fails), compared with the actor the issuer names. It is verified only when the signature and the key's state when it signed are. It is reported apart from the signature check and never rests on the signature, on the issuer's statement or on an authenticator flag.",
       "type": "object",
       "additionalProperties": false,
       "required": ["status"],
@@ -172,13 +172,15 @@
       ]
     },
     "authenticator": {
-      "description": "WebAuthn-ES256 only: the flags of the authenticatorData, carried through as facts. user_verified is what the authenticator states about its own user check; it is not identity.",
+      "description": "WebAuthn-ES256 only: the flags of the authenticatorData, and the client data's crossOrigin and topOrigin when it states them, carried through as facts. user_verified is what the authenticator states about its own user check; it is not identity.",
       "type": "object",
       "additionalProperties": false,
       "required": ["user_present", "user_verified"],
       "properties": {
         "user_present": {"type": "boolean"},
-        "user_verified": {"type": "boolean"}
+        "user_verified": {"type": "boolean"},
+        "cross_origin": {"type": "boolean", "description": "The client data's crossOrigin, when it states one."},
+        "top_origin": {"type": "string", "minLength": 1, "description": "The client data's topOrigin, when it states one."}
       }
     },
     "person_signature_result": {
@@ -226,6 +228,11 @@
         {
           "if": {"properties": {"signature": {"properties": {"status": {"enum": ["failed", "not_checked", "unavailable", "not_supported"]}}, "required": ["status"]}}, "required": ["signature"]},
           "then": {"properties": {"key_state": {"properties": {"status": {"enum": ["failed", "not_checked"]}}}, "identity": {"properties": {"status": {"enum": ["failed", "not_checked"]}}}}}
+        },
+        {
+          "description": "Identity is verified only when the key's state when it signed is: a key outside its validity, superseded, or compromised with no timestamp may have been anyone's by then.",
+          "if": {"properties": {"key_state": {"properties": {"status": {"enum": ["failed", "not_checked", "unavailable", "not_supported"]}}, "required": ["status"]}}, "required": ["key_state"]},
+          "then": {"properties": {"identity": {"properties": {"status": {"enum": ["failed", "not_checked"]}}}}}
         }
       ]
     },
