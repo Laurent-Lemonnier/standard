@@ -76,6 +76,7 @@ PERSON_DIMENSIONS = ("status", "signature", "subject", "key_state", "identity")
 SEAL_DIMENSIONS = ("status", "signature", "subject", "key_state")
 READABLE = {"application/json"}  # media types this check reads a record from
 UP, UV = 0x01, 0x04  # authenticatorData flags: user present, user verified
+SEAL_SIGNED_BYTES_REF = f"{PROFILE} {VERSION} organisation_seal"  # what a copy of a seal names as its signed_bytes_ref
 
 
 def sha256(data):
@@ -262,9 +263,9 @@ def check_policy(policy):
     """One public key has one key reference, one holder and one role; a reference names one entry. A policy that
     breaks this is refused as a whole: every dimension that relies on it is reported as failed. The same rule, the
     same result and the same wording as anchoring 0.2.0's check, since the policy is anchoring's; except that the
-    keys are compared decoded (public_key_identity), whatever their algorithm labels and encodings, where anchoring
-    0.2.0's check groups them by label and hex. When the entries of one key differ in label or in encoding, the
-    finding says so."""
+    keys are compared decoded (public_key_identity), whatever their algorithm labels and encodings, as anchoring
+    0.2.0's check compares them too. When the entries of one key differ in label or in encoding, this check's finding
+    says so; anchoring's does not."""
     findings = []
     for items, ref, what in ((policy["keys"], "key_ref", "key reference"), (policy["tsas"], "tsa_ref",
                              "authority reference"), (policy["checkpoint_sources"], "source_ref", "source reference")):
@@ -405,13 +406,28 @@ def webauthn_verify(key, sig, made_over):
         flags = {"user_present": bool(auth[32] & UP), "user_verified": bool(auth[32] & UV)}
         if not flags["user_present"]:
             findings.append("the UP flag is absent: the authenticator does not state user presence")
+    if flags is not None:  # the client data's cross-origin statements, carried through as facts when it makes them
+        if isinstance(client.get("crossOrigin"), bool):
+            flags["cross_origin"] = client["crossOrigin"]
+        if isinstance(client.get("topOrigin"), str) and client["topOrigin"]:
+            flags["top_origin"] = client["topOrigin"]
     try:
-        public = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), bytes.fromhex(key["public_key_hex"]))
-        public.verify(b64decode(sig["value_b64"]), auth + sha256(client_raw), ec.ECDSA(hashes.SHA256()))
-    except InvalidSignature:
-        findings.append("the signature does not verify over authenticatorData || SHA-256(clientDataJSON)")
-    except (ValueError, TypeError) as exc:
-        findings.append(f"the signature or the key cannot be read: {exc}")
+        raw = bytes.fromhex(key["public_key_hex"])
+    except ValueError:
+        raw = b""
+    if len(raw) != 65 or raw[:1] != b"\x04":
+        # The text says which form a passkey's entry gives. A point written compressed is another writing of the same
+        # key, and the policy check decodes it as such; the entry this profile reads gives the uncompressed point.
+        findings.append(f"the policy's public key for {key['key_ref']} is not the 65-byte uncompressed point "
+                        f"(0x04, x, y) a passkey's entry gives: it is written in {len(raw)} bytes")
+    else:
+        try:
+            public = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), raw)
+            public.verify(b64decode(sig["value_b64"]), auth + sha256(client_raw), ec.ECDSA(hashes.SHA256()))
+        except InvalidSignature:
+            findings.append("the signature does not verify over authenticatorData || SHA-256(clientDataJSON)")
+        except (ValueError, TypeError) as exc:
+            findings.append(f"the signature or the key cannot be read: {exc}")
     return findings, flags
 
 
@@ -560,9 +576,11 @@ def check_person_subject(ps, ctx):
     return out, stage.get("actor_ref")
 
 
-def check_identity(key, policy_result, signature, issuer_named):
+def check_identity(key, policy_result, signature, key_state, issuer_named):
     """The identity dimension: the key's binding to a person, from the policy and the source it names, compared with
-    the actor the issuer names. Apart from the signature check; never from the signature itself."""
+    the actor the issuer names. Apart from the signature check; never from the signature itself. Verified only when
+    the signature and the key's state are: a key outside its validity, superseded, or compromised with no timestamp
+    may have been anyone's by the time it signed, so the signature then shows nothing about its holder."""
     if policy_result["status"] != "verified":
         return refused(policy_result, "the identity")
     if key is None:
@@ -583,12 +601,17 @@ def check_identity(key, policy_result, signature, issuer_named):
         out.update(status="not_checked", findings=["the issuer names no actor to compare with the key's holder"])
         return out
     out["issuer_named"] = issuer_named
-    if issuer_named == key["holder"]:
-        out.update(status="verified", consistency="consistent")
-    else:
+    if issuer_named != key["holder"]:
         out.update(status="failed", consistency="inconsistent",
                    findings=[f"the issuer names {issuer_named}; the trust policy binds {key['key_ref']} to "
                              f"{key['holder']}"])
+    elif key_state["status"] != "verified":
+        out.update(status="not_checked", consistency="consistent",
+                   findings=[f"the key's state when it signed is {key_state['status']}, so the signature does not show "
+                             f"that {key['key_ref']}'s holder signed; the actor the issuer names is the holder the "
+                             "policy gives"])
+    else:
+        out.update(status="verified", consistency="consistent")
     return out
 
 
@@ -621,7 +644,7 @@ def check_person(ps, policy, policy_result, ctx, ts_results):
         out["key_state"] = refused(policy_result, "the key state")
     else:
         out["key_state"] = {"status": "not_checked"}
-    out["identity"] = check_identity(key, policy_result, signature, issuer_named)
+    out["identity"] = check_identity(key, policy_result, signature, out["key_state"], issuer_named)
     out["status"] = combine(signature["status"], out["subject"]["status"], out["key_state"]["status"])
     return out
 
@@ -662,12 +685,19 @@ def check_seal_subject(seal, ctx):
             findings.append(f"the sealed digest is not the digest of the attachment of {s['id']} as issued (with an "
                             "embedded copy of the seal replaced by A)")
         if "issuer_signature" in att:
+            # A copy agrees when every member does: a copy labelled otherwise, or naming other signed bytes, is not a
+            # copy of this seal, even where the issuer sealed the attachment so.
             copy_ = att["issuer_signature"]
-            if (copy_["key_ref"], copy_["value_b64"]) == (seal["signature"]["key_ref"], seal["signature"]["value_b64"]):
+            expected = {"algorithm": seal["signature"]["algorithm"], "key_ref": seal["signature"]["key_ref"],
+                        "signed_bytes_ref": SEAL_SIGNED_BYTES_REF, "value_b64": seal["signature"]["value_b64"]}
+            differs = [k for k in expected if copy_.get(k) != expected[k]]
+            if not differs:
                 out["embedded_copy"] = "verified"
             else:
                 out["embedded_copy"] = "failed"
-                findings.append("the attachment's issuer_signature is not a copy of this seal")
+                findings.append("the attachment's issuer_signature is not a copy of this seal: " + "; ".join(
+                    "its value is not the seal's" if k == "value_b64" else f"its {k} is {copy_.get(k)!r}, the seal's "
+                    f"{expected[k]!r}" for k in differs))
         else:
             out["embedded_copy"] = "not_checked"
         out["status"] = "failed" if findings else "verified"
@@ -1281,6 +1311,9 @@ def vector_case(c, v):
                 bad.append(f"{n}: challenge")
             if client["type"] != w["type"] or client["origin"] != w["origin"]:
                 bad.append(f"{n}: client data")
+            if (client.get("crossOrigin", False) != w.get("cross_origin", False)
+                    or client.get("topOrigin") != w.get("top_origin")):
+                bad.append(f"{n}: cross-origin statements")
             if auth[:32] != sha256(w["rp_id"].encode()) or auth[32] != int(w["flags_hex"], 16):
                 bad.append(f"{n}: authenticator data")
             if (auth + sha256(client_raw)).hex() != w["authenticator_signed_hex"]:
@@ -1316,6 +1349,31 @@ def vector_case(c, v):
             bad.append("digest with A")
         if sha256(compact(att)).hex() == seal["sealed"]["digest"]:
             bad.append("digest over the bytes with the signature present")
+    elif kind == "escaped_copy":
+        # The copy's value written with \/ escapes: the writing is the same attachment; replacing the value's
+        # characters (the rule) gives the sealed digest, as the writing with no escape does, and replacing the
+        # written characters gives another, which is not the rule.
+        e, att = v["escaped_copy"], v["action_binding_attachments"][c["decision_id"]]
+        sealed = v["organisation_seals"][c["seal"]]["assertion"]["sealed"]["digest"]
+        written, value = e["attachment_text"].encode("utf-8"), att["issuer_signature"]["value_b64"]
+        if "\\/" not in e["value_as_written"] or e["value_as_written"].replace("\\/", "/") != value:
+            bad.append("the written value")
+        if json.loads(written) != att or compact(att) == written:
+            bad.append("the writing")
+        if (len(value), len(e["value_as_written"])) != (e["value_characters"], e["written_characters"]):
+            bad.append("the counts")
+        quoted = ('"value_b64":"' + e["value_as_written"] + '"').encode("utf-8")
+        by_value = sha256(written.replace(quoted, b'"value_b64":"' + b"A" * len(value) + b'"')).hex()
+        by_writing = sha256(written.replace(quoted, b'"value_b64":"' + b"A" * len(e["value_as_written"]) + b'"')).hex()
+        if written.count(quoted) != 1 or (by_value, by_writing) != (
+                e["digest_replacing_the_value_characters"], e["digest_replacing_the_written_characters"]):
+            bad.append("the digests")
+        if e["sealed_digest"] != sealed or sha256(attachment_bytes_for_seal(att)).hex() != sealed:
+            bad.append("the sealed digest")
+        if by_value != sealed:
+            bad.append("replacing the value's characters does not give the sealed digest")
+        if by_writing == sealed:
+            bad.append("replacing the written characters gives the sealed digest")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")
@@ -1386,7 +1444,7 @@ def person_case(c, v, validators):
     summary.update({d: (r[d] if d == "status" else r[d]["status"]) for d in PERSON_DIMENSIONS})
     if r["key_state"]["status"] == "verified":
         summary["time_basis"] = r["key_state"]["time_basis"]
-    for k in ("user_present", "user_verified"):
+    for k in ("user_present", "user_verified", "cross_origin", "top_origin"):
         if k in c["expected"]:
             summary[k] = (r.get("authenticator") or {}).get(k)
     for k in ("covers_affirmation_record",):

@@ -482,7 +482,7 @@ def make_person(keys, key_name, body, presented=None, signed_as=None):
 
 
 def make_passkey(keys, key_name, body, *, rp_id=RP_ID, origin=ORIGIN, flags=0x05, type_="webauthn.get",
-                 challenge_over=None, sign_count=7, presented=None):
+                 challenge_over=None, sign_count=7, presented=None, cross_origin=False, top_origin=None):
     """A person's assertion signed with a WebAuthn passkey (ES256). The authenticator signs
     authenticatorData || SHA-256(clientDataJSON); the challenge in clientDataJSON is SHA-256 of the signed bytes,
     in base64url without padding, as a browser writes it."""
@@ -490,8 +490,10 @@ def make_passkey(keys, key_name, body, *, rp_id=RP_ID, origin=ORIGIN, flags=0x05
           "signature": {"algorithm": "WebAuthn-ES256", "key_ref": key_name}}
     made_over = signed_bytes(person_fields(ps))
     challenge = sha256(challenge_over if challenge_over is not None else made_over)
-    client_data = json.dumps({"type": type_, "challenge": b64url(challenge), "origin": origin, "crossOrigin": False},
-                             separators=(",", ":")).encode("utf-8")
+    client = {"type": type_, "challenge": b64url(challenge), "origin": origin, "crossOrigin": cross_origin}
+    if top_origin:
+        client["topOrigin"] = top_origin
+    client_data = json.dumps(client, separators=(",", ":")).encode("utf-8")
     authenticator_data = sha256(rp_id.encode("utf-8")) + bytes([flags]) + sign_count.to_bytes(4, "big")
     signature = keys[key_name].sign(authenticator_data + sha256(client_data),
                                     ec.ECDSA(hashes.SHA256(), deterministic_signing=True))
@@ -500,6 +502,7 @@ def make_passkey(keys, key_name, body, *, rp_id=RP_ID, origin=ORIGIN, flags=0x05
     present(ps, presented)
     return {"signed_with": key_name, "assertion": ps, "signed_bytes_hex": made_over.hex(),
             "webauthn": {"challenge_b64url": b64url(challenge), "rp_id": rp_id, "origin": origin, "type": type_,
+                         "cross_origin": cross_origin, **({"top_origin": top_origin} if top_origin else {}),
                          "flags_hex": f"{flags:02x}", "authenticator_signed_hex":
                          (authenticator_data + sha256(client_data)).hex()}}
 
@@ -689,6 +692,9 @@ def build():
     persons["approval_passkey_bad_signature"] = bad
     passkey("approval_passkey_rs256_label", "approval_passkey labelled WebAuthn-RS256, a suite the reference check does "
             "not support", "person-a-passkey-1", passkey_approval, presented={"algorithm": "WebAuthn-RS256"})
+    passkey("approval_passkey_cross_origin", "the same approval signed in a cross-origin frame: the client data states "
+            "crossOrigin true and a topOrigin, which the check carries through as facts", "person-a-passkey-1",
+            passkey_approval, cross_origin=True, top_origin="https://top.example.org")
 
     # ---- the organisation's seals
     seals = {}
@@ -710,6 +716,49 @@ def build():
     if len(value) != ED25519_SIGNATURE_B64_LENGTH:
         raise ValueError("an Ed25519 signature in padded base64 has 88 characters")
     ab_approved["issuer_signature"] = embedded_signature("org-seal-1", value)
+    # Copies that are not copies: the issuer sealed the attachment with a copy whose algorithm label, or whose
+    # signed_bytes_ref, is not the seal's. The sealed digest matches those bytes; the copy does not agree. Each seal
+    # gives the member as the issuer wrote it (issuer_signature), the value in place, for the cases to put in.
+    for name, about, member in (
+            ("seal_attachment_copy_relabelled", "org-seal-1 seals the attachment of DR-2099-101 carrying a copy "
+             "of the seal labelled EdDSA: the digest is over those bytes, so it matches; the copy does not agree "
+             "with the seal",
+             {"algorithm": "EdDSA"}),
+            ("seal_attachment_copy_other_ref", "org-seal-1 seals the attachment of DR-2099-101 carrying a copy whose "
+             "signed_bytes_ref names anchoring's checkpoint: the digest matches; the copy does not agree with the seal",
+             {"signed_bytes_ref": "dps-anchoring 0.2.0 checkpoint"})):
+        variant = copy.deepcopy(ab_approved)
+        variant["issuer_signature"] = dict(placeholder, **member)
+        mk_seal(name, about, "org-seal-1",
+                {"kind": "attachment", "id": DECISION_A, "digest": sha256(compact(variant)).hex()},
+                "2026-10-01T09:32:00Z")
+        seals[name]["issuer_signature"] = dict(variant["issuer_signature"],
+                                               value_b64=seals[name]["assertion"]["signature"]["value_b64"])
+    # The copy written with an escape: JSON lets a writer escape / as \/. The rule replaces the value's characters,
+    # whatever the writing, so this writing gives the sealed digest, as the writing with no escape does; replacing the
+    # 92 written characters instead gives another digest, and is not the rule. Both are given here.
+    written = compact(ab_approved)
+    escaped_value = value.replace("/", "\\/")
+    old, new = f'"value_b64":"{value}"'.encode("utf-8"), f'"value_b64":"{escaped_value}"'.encode("utf-8")
+    if written.count(old) != 1 or escaped_value == value or json.loads(written.replace(old, new)) != ab_approved:
+        raise ValueError("the escaped writing of the attachment is not what this generator expects")
+    escaped = written.replace(old, new)
+    escaped_copy = {
+        "about": "The attachment of DR-2099-101 written with the copy's value escaped (/ as \\/). The rule replaces "
+                 "the value's characters, 88 here, whatever the writing: this writing gives the sealed digest, as the "
+                 "writing with no escape does (digest_replacing_the_value_characters); replacing the 92 written "
+                 "characters instead gives another digest (digest_replacing_the_written_characters), which is not "
+                 "the rule.",
+        "attachment_text": escaped.decode("utf-8"),
+        "value_as_written": escaped_value,
+        "value_characters": len(value),
+        "written_characters": len(escaped_value),
+        "sealed_digest": digest_with_placeholder,
+        "digest_replacing_the_value_characters": sha256(escaped.replace(new, b'"value_b64":"' + b"A" * len(value)
+                                                                        + b'"')).hex(),
+        "digest_replacing_the_written_characters": sha256(escaped.replace(new, b'"value_b64":"'
+                                                                          + b"A" * len(escaped_value) + b'"')).hex(),
+    }
     mk_seal("seal_attachment_wrong_rule", "a seal over the digest of the attachment's bytes with the embedded copy's "
             "value present, not replaced by A", "org-seal-1",
             {"kind": "attachment", "id": DECISION_A, "digest": sha256(compact(ab_approved)).hex()},
@@ -997,7 +1046,7 @@ def build():
         "person_signatures": [
             person_result(0, "approval_a", "2026-10-01T09:12:00Z", "owner-example-1"),
             person_result(1, "approval_passkey", "2026-10-01T09:12:30Z", "owner-example-1",
-                          authenticator={"user_present": True, "user_verified": True}),
+                          authenticator={"user_present": True, "user_verified": True, "cross_origin": False}),
             person_result(2, "review_b0", "2026-10-02T09:21:00Z", "reviewer-example-2", revocation="superseded"),
             person_result(3, "affirmation_r0", "2026-09-25T11:00:00Z", "owner-example-1",
                           extra={"covers_affirmation_record": True}, checked_against="export_entry"),
@@ -1051,6 +1100,7 @@ def build():
         "specification": {"text": SPECIFICATION, "spec_digest": spec_digest},
         "view": {"text": VIEW, "digest": view_digest},
         "action_binding_attachments": action_binding,
+        "escaped_copy": escaped_copy,
         "certificates": certificates,
         "person_signatures": persons,
         "organisation_seals": seals,
