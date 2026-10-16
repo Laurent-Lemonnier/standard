@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://decisionprovenancestandard.org/extensions/signatures/0.1.0/verification-report.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Signatures extension 0.1.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, portable verification 0.1.0, action binding 0.2.0 and anchoring 0.2.0. Binds only an implementation that says it uses this extension.",
+  "title": "Signatures verification report",
+  "description": "What a verifier found for each person's signature, each organisation's seal and each independent timestamp, as separate dimensions, each naming the key reference and the source it was checked against, with the identity dimension apart from the signature check and the scope of its conclusion. There is deliberately no overall result: no assertion stands for another, and nothing here is a legal conclusion or a Conformance Level.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile",
+    "profile_version",
+    "trust_policy_ref",
+    "trust_policy",
+    "attachment_digest",
+    "documents",
+    "person_signature_count",
+    "person_signatures",
+    "organisation_seal_count",
+    "organisation_seals",
+    "timestamp_count",
+    "timestamps",
+    "scope_of_conclusion"
+  ],
+  "properties": {
+    "profile": {"const": "dps-signatures-report"},
+    "profile_version": {"const": "0.1.0"},
+    "trust_policy_ref": {"type": "string", "minLength": 1, "description": "The trust policy the verifier configured independently of the attachment and the documents: anchoring 0.2.0's trust policy, which holds the keys of every role."},
+    "trust_policy": {
+      "description": "Whether the policy itself was accepted: one public key, one key reference, one holder, one role; one reference, one entry. A refused policy fails every dimension that relies on it. The same object as in an anchoring report.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["verified", "failed"]},
+        "findings": {"$ref": "#/$defs/findings"}
+      }
+    },
+    "attachment_digest": {"$ref": "#/$defs/sha256_hex", "description": "SHA-256 of the signatures attachment's bytes as received."},
+    "documents": {
+      "description": "The documents the assertions were checked against, each with the SHA-256 of its bytes as received: the export the records were read from, and each action-binding attachment, by its decision_id.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "digest"],
+        "properties": {
+          "kind": {"enum": ["export", "action_binding_attachment"]},
+          "decision_id": {"type": "string", "minLength": 1},
+          "digest": {"$ref": "#/$defs/sha256_hex"}
+        },
+        "if": {"properties": {"kind": {"const": "action_binding_attachment"}}, "required": ["kind"]},
+        "then": {"required": ["decision_id"]},
+        "else": {"not": {"required": ["decision_id"]}}
+      }
+    },
+    "person_signature_count": {"$ref": "#/$defs/count", "description": "The number of person's signatures in the attachment. The report has one result for each, and each signature_index from 0 to this count minus 1 appears once. JSON Schema cannot compare two documents: a reader holding both checks it."},
+    "person_signatures": {"type": "array", "items": {"$ref": "#/$defs/person_signature_result"}},
+    "organisation_seal_count": {"$ref": "#/$defs/count"},
+    "organisation_seals": {"type": "array", "items": {"$ref": "#/$defs/organisation_seal_result"}},
+    "timestamp_count": {"$ref": "#/$defs/count"},
+    "timestamps": {"type": "array", "items": {"$ref": "#/$defs/timestamp_result"}},
+    "scope_of_conclusion": {"$ref": "#/$defs/scope_of_conclusion"}
+  },
+  "if": {"properties": {"trust_policy": {"properties": {"status": {"const": "failed"}}}}, "required": ["trust_policy"]},
+  "then": {
+    "description": "A refused policy: nothing is verified against it.",
+    "properties": {
+      "person_signatures": {"items": {"properties": {"status": {"const": "failed"}}}},
+      "organisation_seals": {"items": {"properties": {"status": {"const": "failed"}}}},
+      "timestamps": {"items": {"properties": {"status": {"const": "failed"}}}}
+    }
+  },
+  "$defs": {
+    "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ref": {"type": "string", "minLength": 1, "maxLength": 256},
+    "count": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "index": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+    "instant": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$"},
+    "status": {"enum": ["verified", "failed", "not_checked", "unavailable", "not_supported"]},
+    "findings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "signature_check": {
+      "description": "The signature over the signed bytes the verifier built, with the key the trust policy gives for key_ref, in the role the assertion needs. For WebAuthn-ES256 it includes the client data (type, challenge, origin), the relying party and the user-presence flag.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "algorithm": {"type": "string", "minLength": 1},
+        "reference_source": {"enum": ["trust_policy", "same_attachment"], "description": "Where the key came from."},
+        "certificate": {"$ref": "#/$defs/status", "description": "An organisation's seal only: the pinned certificate holds the key (verified), or none is pinned (not_checked)."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {
+        "required": ["key_ref", "algorithm", "reference_source"],
+        "properties": {"reference_source": {"const": "trust_policy"}, "certificate": {"enum": ["verified", "not_checked"]}}
+      }
+    },
+    "subject_check": {
+      "description": "The signed fields against the document they name: the outcome stage and its review in the action-binding attachment, or the record's seal in the export; for a seal, the digest of the bytes as issued. checked_against names the document.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "checked_against": {"enum": ["action_binding_attachment", "export_entry", "export"]},
+        "covers_affirmation_record": {"type": "boolean", "description": "A person's affirmation only: whether the sealed bytes, and so the signed digest, include affirmation_record, as the export states."},
+        "embedded_copy": {"$ref": "#/$defs/status", "description": "A seal of an attachment only: the copy of the seal the attachment carries as issuer_signature agrees with the seal (verified), or there is none (not_checked)."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {"required": ["checked_against"], "properties": {"embedded_copy": {"enum": ["verified", "not_checked"]}}}
+    },
+    "key_state": {
+      "description": "The key's state when the signature was made, as anchoring 0.2.0 defines it. time_basis says what that time rests on: stated_time is the signer's own statement (signed_at or sealed_at), never independent time; independent_timestamp is a verified timestamp over the signature value.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "revocation_reason": {"enum": ["superseded", "compromised"]},
+        "time_basis": {"enum": ["stated_time", "independent_timestamp"]},
+        "time": {"$ref": "#/$defs/instant"},
+        "timestamp_index": {"$ref": "#/$defs/index", "description": "The timestamp the time rests on."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {"required": ["key_ref", "time_basis", "time"]}
+        },
+        {
+          "if": {"properties": {"time_basis": {"const": "independent_timestamp"}}, "required": ["time_basis"]},
+          "then": {"required": ["timestamp_index"]},
+          "else": {"not": {"required": ["timestamp_index"]}}
+        },
+        {
+          "description": "After a compromise, only an independent timestamp earlier than revoked_at establishes the time.",
+          "if": {
+            "properties": {"status": {"const": "verified"}, "revocation_reason": {"const": "compromised"}},
+            "required": ["status", "revocation_reason"]
+          },
+          "then": {"properties": {"time_basis": {"const": "independent_timestamp"}}}
+        }
+      ]
+    },
+    "identity": {
+      "description": "The binding of the key to a person, from the verifier's trust policy and the source it names there (identity_source_ref, which this profile requires for a person's key; without one the identity fails), compared with the actor the issuer names. It is reported apart from the signature check and never rests on the signature, on the issuer's statement or on an authenticator flag.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "basis": {"const": "trust_policy"},
+        "source_ref": {"$ref": "#/$defs/ref", "description": "The identity source the policy names for the key."},
+        "holder": {"type": "string", "minLength": 1, "description": "The holder the policy gives."},
+        "issuer_named": {"type": "string", "minLength": 1, "description": "The actor the issuer names: the outcome's actor_ref, or affirmation_record.actor_identity."},
+        "consistency": {"enum": ["consistent", "inconsistent"]},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {"required": ["basis", "source_ref", "holder", "issuer_named", "consistency"], "properties": {"consistency": {"const": "consistent"}}}
+        },
+        {
+          "if": {"properties": {"consistency": {"const": "inconsistent"}}, "required": ["consistency"]},
+          "then": {"properties": {"status": {"const": "failed"}}}
+        }
+      ]
+    },
+    "authenticator": {
+      "description": "WebAuthn-ES256 only: the flags of the authenticatorData, carried through as facts. user_verified is what the authenticator states about its own user check; it is not identity.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user_present", "user_verified"],
+      "properties": {
+        "user_present": {"type": "boolean"},
+        "user_verified": {"type": "boolean"}
+      }
+    },
+    "person_signature_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signature_index", "assertion", "decision_id", "key_ref", "status", "signature", "subject", "key_state", "identity"],
+      "properties": {
+        "signature_index": {"$ref": "#/$defs/index"},
+        "assertion": {"enum": ["person_approval", "person_review", "person_affirmation"]},
+        "decision_id": {"type": "string", "minLength": 1},
+        "stage_id": {"type": "string", "minLength": 1},
+        "key_ref": {"$ref": "#/$defs/ref", "description": "The key reference the assertion states."},
+        "status": {"$ref": "#/$defs/status", "description": "The assertion as one dimension: the holder of the key signed these bytes, which name this outcome or record. Verified only when signature, subject and key_state are. Identity is not part of it."},
+        "signature": {"$ref": "#/$defs/signature_check"},
+        "authenticator": {"$ref": "#/$defs/authenticator"},
+        "subject": {"$ref": "#/$defs/subject_check"},
+        "key_state": {"$ref": "#/$defs/key_state"},
+        "identity": {"$ref": "#/$defs/identity"},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"assertion": {"const": "person_affirmation"}}, "required": ["assertion"]},
+          "then": {"not": {"required": ["stage_id"]}},
+          "else": {"required": ["stage_id"]}
+        },
+        {
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {
+            "properties": {
+              "signature": {"properties": {"status": {"const": "verified"}}},
+              "subject": {"properties": {"status": {"const": "verified"}}},
+              "key_state": {"properties": {"status": {"const": "verified"}}}
+            }
+          }
+        },
+        {
+          "description": "A verified WebAuthn signature reports the authenticator's flags, with the user present.",
+          "if": {
+            "properties": {"signature": {"properties": {"status": {"const": "verified"}, "algorithm": {"const": "WebAuthn-ES256"}}, "required": ["status", "algorithm"]}},
+            "required": ["signature"]
+          },
+          "then": {"required": ["authenticator"], "properties": {"authenticator": {"properties": {"user_present": {"const": true}}}}}
+        },
+        {
+          "if": {"properties": {"signature": {"properties": {"status": {"enum": ["failed", "not_checked", "unavailable", "not_supported"]}}, "required": ["status"]}}, "required": ["signature"]},
+          "then": {"properties": {"key_state": {"properties": {"status": {"enum": ["failed", "not_checked"]}}}, "identity": {"properties": {"status": {"enum": ["failed", "not_checked"]}}}}}
+        }
+      ]
+    },
+    "organisation_seal_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seal_index", "sealed", "key_ref", "status", "signature", "subject", "key_state"],
+      "properties": {
+        "seal_index": {"$ref": "#/$defs/index"},
+        "sealed": {
+          "description": "What the seal names, without its digest.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": {"enum": ["export", "attachment", "record"]},
+            "id": {"type": "string", "minLength": 1}
+          }
+        },
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "status": {"$ref": "#/$defs/status", "description": "The seal as one dimension: the holder of the organisation's key issued these exact bytes. Verified only when signature, subject and key_state are."},
+        "signature": {"$ref": "#/$defs/signature_check"},
+        "subject": {"$ref": "#/$defs/subject_check"},
+        "key_state": {"$ref": "#/$defs/key_state"},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {
+            "properties": {
+              "signature": {"properties": {"status": {"const": "verified"}}},
+              "subject": {"properties": {"status": {"const": "verified"}}},
+              "key_state": {"properties": {"status": {"const": "verified"}}}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"signature": {"properties": {"status": {"enum": ["failed", "not_checked", "unavailable", "not_supported"]}}, "required": ["status"]}}, "required": ["signature"]},
+          "then": {"properties": {"key_state": {"properties": {"status": {"enum": ["failed", "not_checked"]}}}}}
+        }
+      ]
+    },
+    "timestamp_result": {
+      "description": "An independent timestamp over a signature value, checked as anchoring 0.2.0 says, with the signer's stated time compared with it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp_index", "subject", "status", "tsa_ref", "checks", "signer_time"],
+      "properties": {
+        "timestamp_index": {"$ref": "#/$defs/index"},
+        "subject": {
+          "description": "The subject as the attachment states it, without its value.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "of"],
+          "properties": {
+            "kind": {"const": "signature"},
+            "of": {"type": "object"}
+          }
+        },
+        "status": {"$ref": "#/$defs/status"},
+        "tsa_ref": {"$ref": "#/$defs/ref", "description": "The authority the token was checked against."},
+        "reference_source": {"enum": ["trust_policy", "same_token"], "description": "Where the authority's certificate came from."},
+        "gen_time": {"$ref": "#/$defs/instant"},
+        "existed_no_later_than": {"$ref": "#/$defs/instant", "description": "genTime plus the token's accuracy, if it states one: the time T by which the signature existed."},
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["token", "message_imprint", "subject_bytes", "message_digest", "tsa_signature", "signer_certificate", "tsa_state"],
+          "properties": {
+            "token": {"$ref": "#/$defs/status"},
+            "message_imprint": {"$ref": "#/$defs/status"},
+            "subject_bytes": {"$ref": "#/$defs/status", "description": "The subject's bytes are the signature value of the assertion it names, among those in the attachment."},
+            "message_digest": {"$ref": "#/$defs/status"},
+            "tsa_signature": {"$ref": "#/$defs/status", "description": "The signer the token names is the pinned certificate, the token's signature algorithm fits its key, and the signature verifies with that key."},
+            "signer_certificate": {"$ref": "#/$defs/status", "description": "The ESSCertIDv2 certificate hash, when the token has one made with SHA-256, is that of the pinned certificate. Without one, or with one made with another hash, not_checked."},
+            "tsa_state": {"$ref": "#/$defs/status"}
+          }
+        },
+        "signer_time": {"$ref": "#/$defs/signer_time"},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {
+        "required": ["reference_source", "gen_time", "existed_no_later_than"],
+        "properties": {
+          "reference_source": {"const": "trust_policy"},
+          "checks": {
+            "properties": {
+              "token": {"const": "verified"},
+              "message_imprint": {"const": "verified"},
+              "subject_bytes": {"const": "verified"},
+              "message_digest": {"const": "verified"},
+              "tsa_signature": {"const": "verified"},
+              "signer_certificate": {"enum": ["verified", "not_checked"]},
+              "tsa_state": {"const": "verified"}
+            }
+          }
+        }
+      },
+      "else": {
+        "description": "No time is given for a timestamp that is not verified, and no signer's time is compared with it.",
+        "not": {"anyOf": [{"required": ["gen_time"]}, {"required": ["existed_no_later_than"]}]},
+        "properties": {"signer_time": {"properties": {"status": {"const": "not_checked"}}}}
+      }
+    },
+    "signer_time": {
+      "description": "The time the signer states (signed_at or sealed_at) compared with existed_no_later_than. inconsistent: the stated time is later than the timestamp. It is reported apart from the timestamp, which it does not change.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "stated": {"$ref": "#/$defs/instant"},
+        "stated_in": {"enum": ["signed_at", "sealed_at"]},
+        "consistency": {"enum": ["consistent", "inconsistent"]},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"enum": ["verified", "failed"]}}, "required": ["status"]},
+          "then": {"required": ["stated", "stated_in", "consistency"]},
+          "else": {"not": {"required": ["consistency"]}}
+        },
+        {
+          "if": {"properties": {"consistency": {"const": "inconsistent"}}, "required": ["consistency"]},
+          "then": {"properties": {"status": {"const": "failed"}}}
+        },
+        {
+          "if": {"properties": {"consistency": {"const": "consistent"}}, "required": ["consistency"]},
+          "then": {"properties": {"status": {"const": "verified"}}}
+        }
+      ]
+    },
+    "scope_of_conclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["covers", "not_assessed"],
+      "properties": {
+        "covers": {"const": "supplied_attachment_and_documents_only"},
+        "not_assessed": {
+          "description": "Every one of these, always: what the person's signature and the organisation's seal do not prove.",
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 10,
+          "items": {
+            "enum": [
+              "legal_requirements",
+              "conformance_level",
+              "truth_of_record_content",
+              "whether_the_person_read_or_understood",
+              "view_matched_action",
+              "who_held_the_key",
+              "organisational_authority",
+              "legal_effect",
+              "that_any_person_reviewed",
+              "time_of_issue"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
