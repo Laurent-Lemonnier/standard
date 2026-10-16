@@ -432,6 +432,16 @@
       ]
     }
   },
+  "escaped_copy": {
+    "about": "The attachment of DR-2099-101 written with the copy's value escaped (/ as \\/). The rule replaces the value's characters, 88 here, whatever the writing: this writing gives the sealed digest, as the writing with no escape does (digest_replacing_the_value_characters); replacing the 92 written characters instead gives another digest (digest_replacing_the_written_characters), which is not the rule.",
+    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.2.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.1.0 organisation_seal\",\"value_b64\":\"QksWzTEpexh9hSURvmPzLTX5Mj4PXdHgmo7i0\\/\\/dYS\\/2VjSO0DilTd8Z7nF3aYO0a8oJY6A8w4\\/xCVjn6O3VCw==\"}}",
+    "value_as_written": "QksWzTEpexh9hSURvmPzLTX5Mj4PXdHgmo7i0\\/\\/dYS\\/2VjSO0DilTd8Z7nF3aYO0a8oJY6A8w4\\/xCVjn6O3VCw==",
+    "value_characters": 88,
+    "written_characters": 92,
+    "sealed_digest": "cedc39fdaf1520b4385f8b4328148f986791f7acf945cae48aa9f8fac13de63e",
+    "digest_replacing_the_value_characters": "cedc39fdaf1520b4385f8b4328148f986791f7acf945cae48aa9f8fac13de63e",
+    "digest_replacing_the_written_characters": "f855f1f1806498368cd480dee9492b4997325faae4597dc69762cabcb8db4d25"
+  },
   "certificates": {
     "org-seal-1": {
       "certificate_b64": "MIIBjTCCAT+gAwIBAgICCwEwBQYDK2VwME8xIzAhBgNVBAoMGkV4YW1wbGUgaXNzdWVyICh0ZXN0IG9ubHkpMSgwJgYDVQQDDB9FeGFtcGxlIGlzc3VlciBzZWFsICh0ZXN0IG9ubHkpMB4XDTI2MDEwMTAwMDAwMFoXDTI3MTIzMTIzNTk1OVowTzEjMCEGA1UECgwaRXhhbXBsZSBpc3N1ZXIgKHRlc3Qgb25seSkxKDAmBgNVBAMMH0V4YW1wbGUgaXNzdWVyIHNlYWwgKHRlc3Qgb25seSkwKjAFBgMrZXADIQCKB7PTofl9crPk3sauYQsCr1J2vDkoaUkc1Z04jN1r8qM/MD0wDAYDVR0TAQH/BAIwADAOBgNVHQ8BAf8EBAMCBsAwHQYDVR0OBBYEFLKjwxGvaLJ0CBVyEkKH7y1fJaZ9MAUGAytlcANBAGtz+thXcRK7SbXI0WnXfAGMcUyq+8aBg8th81mKmnm4CMvnKuVqJQ8jbQ6swGwK7pd75z3tW4Hsn9LejXCRAwo=",
@@ -1155,6 +1165,7 @@
         "rp_id": "example.org",
         "origin": "https://example.org",
         "type": "webauthn.get",
+        "cross_origin": false,
         "flags_hex": "05",
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000007b8f6f69de3010210931e2254334a1e7784f2a3eb0fae3585b3a400cce408bd82"
       }
@@ -1187,6 +1198,7 @@
         "rp_id": "example.org",
         "origin": "https://example.org",
         "type": "webauthn.get",
+        "cross_origin": false,
         "flags_hex": "01",
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50100000007b8f6f69de3010210931e2254334a1e7784f2a3eb0fae3585b3a400cce408bd82"
       }
@@ -1219,6 +1231,7 @@
         "rp_id": "example.org",
         "origin": "https://example.org",
         "type": "webauthn.get",
+        "cross_origin": false,
         "flags_hex": "04",
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50400000007b8f6f69de3010210931e2254334a1e7784f2a3eb0fae3585b3a400cce408bd82"
       }
@@ -1251,6 +1264,7 @@
         "rp_id": "example.org",
         "origin": "https://example.org",
         "type": "webauthn.get",
+        "cross_origin": false,
         "flags_hex": "05",
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b5050000000761653d048578033f076d1928ba7a513b9c4ea41873893b218169b3829e7dbe18"
       }
@@ -1283,6 +1297,7 @@
         "rp_id": "example.org",
         "origin": "https://example.net",
         "type": "webauthn.get",
+        "cross_origin": false,
         "flags_hex": "05",
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000007bca8fce02b726e15567016ae4e05302fd0d687e0316f2a33e44791725040d3ac"
       }
@@ -1315,6 +1330,7 @@
         "rp_id": "example.net",
         "origin": "https://example.org",
         "type": "webauthn.get",
+        "cross_origin": false,
         "flags_hex": "05",
         "authenticator_signed_hex": "3daab7cff97925bbd07d11df5dc3b0e37e2d965520175ada0ec62ce72cda5ed20500000007b8f6f69de3010210931e2254334a1e7784f2a3eb0fae3585b3a400cce408bd82"
       }
@@ -1347,6 +1363,7 @@
         "rp_id": "example.org",
         "origin": "https://example.org",
         "type": "webauthn.create",
+        "cross_origin": false,
         "flags_hex": "05",
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b505000000075385cb0b36eeb0a4259d6f5bedaac241d0b38a89df6599432edadacbdc068677"
       }
@@ -1379,6 +1396,7 @@
         "rp_id": "example.org",
         "origin": "https://example.org",
         "type": "webauthn.get",
+        "cross_origin": false,
         "flags_hex": "05",
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000007b8f6f69de3010210931e2254334a1e7784f2a3eb0fae3585b3a400cce408bd82"
       }
@@ -1411,8 +1429,43 @@
         "rp_id": "example.org",
         "origin": "https://example.org",
         "type": "webauthn.get",
+        "cross_origin": false,
         "flags_hex": "05",
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000007b8f6f69de3010210931e2254334a1e7784f2a3eb0fae3585b3a400cce408bd82"
+      }
+    },
+    "approval_passkey_cross_origin": {
+      "about": "the same approval signed in a cross-origin frame: the client data states crossOrigin true and a topOrigin, which the check carries through as facts",
+      "signed_with": "person-a-passkey-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.1.0",
+        "assertion": "person_approval",
+        "decision_id": "DR-2099-101",
+        "stage_id": "o1",
+        "outcome": "approved",
+        "shown_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "approved_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "signed_at": "2026-10-01T09:12:30Z",
+        "signature": {
+          "algorithm": "WebAuthn-ES256",
+          "key_ref": "person-a-passkey-1",
+          "value_b64": "MEUCICON2iuibdIXpuEjqG+jxIKHKi6XfwEeDgjCb+RSkfhMAiEA/OqVAedyoAVZF0KJpm5DwzwIAJREYLcW1jnSA0HqRhk=",
+          "authenticator_data_b64": "v6vDdDKViwYzYNOtZGHJxHNa5/jt1GWSpeDwFFKy5LUFAAAABw==",
+          "client_data_json_b64": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiYVg5eGJuSGhnSW40cnl3MGNCU1kybE9jSFk1d0ozYzVvTTBpdE54elROUSIsIm9yaWdpbiI6Imh0dHBzOi8vZXhhbXBsZS5vcmciLCJjcm9zc09yaWdpbiI6dHJ1ZSwidG9wT3JpZ2luIjoiaHR0cHM6Ly90b3AuZXhhbXBsZS5vcmcifQ=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e312e300000000f706572736f6e5f617070726f76616c00000012706572736f6e2d612d706173736b65792d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e900000014323032362d31302d30315430393a31323a33305a",
+      "webauthn": {
+        "challenge_b64url": "aX9xbnHhgIn4ryw0cBSY2lOcHY5wJ3c5oM0itNxzTNQ",
+        "rp_id": "example.org",
+        "origin": "https://example.org",
+        "type": "webauthn.get",
+        "cross_origin": true,
+        "top_origin": "https://top.example.org",
+        "flags_hex": "05",
+        "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000007f51650ef7d1996e2822db0d3edf269aaf2c4312acca9f69194c0f6e99d1caaef"
       }
     }
   },
@@ -1437,6 +1490,60 @@
         }
       },
       "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e312e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020cedc39fdaf1520b4385f8b4328148f986791f7acf945cae48aa9f8fac13de63e00000014323032362d31302d30315430393a33303a30305a"
+    },
+    "seal_attachment_copy_relabelled": {
+      "about": "org-seal-1 seals the attachment of DR-2099-101 carrying a copy of the seal labelled EdDSA: the digest is over those bytes, so it matches; the copy does not agree with the seal",
+      "signed_with": "org-seal-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.1.0",
+        "assertion": "organisation_seal",
+        "sealed": {
+          "kind": "attachment",
+          "id": "DR-2099-101",
+          "digest": "93b32b024e5b2e1c9c0d283752f1854b859febe09ff22dbf2c7dc2f5b4dbfb54"
+        },
+        "sealed_at": "2026-10-01T09:32:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "org-seal-1",
+          "value_b64": "aFIKSUtr8A9TgSpKlfvHRWOZ4faMkwpqxJJ3XhouDi2h5tQeN5Vcxois6B2mt8p0fEQB5+mPdLsRf4Hk9c2qCQ=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e312e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d3130310000002093b32b024e5b2e1c9c0d283752f1854b859febe09ff22dbf2c7dc2f5b4dbfb5400000014323032362d31302d30315430393a33323a30305a",
+      "issuer_signature": {
+        "algorithm": "EdDSA",
+        "key_ref": "org-seal-1",
+        "signed_bytes_ref": "dps-signatures 0.1.0 organisation_seal",
+        "value_b64": "aFIKSUtr8A9TgSpKlfvHRWOZ4faMkwpqxJJ3XhouDi2h5tQeN5Vcxois6B2mt8p0fEQB5+mPdLsRf4Hk9c2qCQ=="
+      }
+    },
+    "seal_attachment_copy_other_ref": {
+      "about": "org-seal-1 seals the attachment of DR-2099-101 carrying a copy whose signed_bytes_ref names anchoring's checkpoint: the digest matches; the copy does not agree with the seal",
+      "signed_with": "org-seal-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.1.0",
+        "assertion": "organisation_seal",
+        "sealed": {
+          "kind": "attachment",
+          "id": "DR-2099-101",
+          "digest": "276e9b871af0031e4a6e877ea04f847edadfa8a216885de6de6d3ba60b71bf32"
+        },
+        "sealed_at": "2026-10-01T09:32:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "org-seal-1",
+          "value_b64": "V5MDIBD4Oxkr+964VF+KQ1y2BK9lULVGvWBkjabsLz7CQ8amSJBxUkLcd7qT6+MDDFk3wmgmgGYiW/8CdJviDg=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e312e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020276e9b871af0031e4a6e877ea04f847edadfa8a216885de6de6d3ba60b71bf3200000014323032362d31302d30315430393a33323a30305a",
+      "issuer_signature": {
+        "algorithm": "Ed25519",
+        "key_ref": "org-seal-1",
+        "signed_bytes_ref": "dps-anchoring 0.2.0 checkpoint",
+        "value_b64": "V5MDIBD4Oxkr+964VF+KQ1y2BK9lULVGvWBkjabsLz7CQ8amSJBxUkLcd7qT6+MDDFk3wmgmgGYiW/8CdJviDg=="
+      }
     },
     "seal_attachment_wrong_rule": {
       "about": "a seal over the digest of the attachment's bytes with the embedded copy's value present, not replaced by A",
@@ -2642,7 +2749,8 @@
         },
         "authenticator": {
           "user_present": true,
-          "user_verified": true
+          "user_verified": true,
+          "cross_origin": false
         },
         "subject": {
           "status": "verified",
