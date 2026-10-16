@@ -152,10 +152,41 @@ def checkpoint_signed_bytes(cp):
 
 # ---------------------------------------------------------------- the verifier's trust policy
 
+def public_key_identity(entry):
+    """The public key an entry lists, from its bytes alone: the entry's algorithm label plays no part, so that one key
+    labelled Ed25519 in one entry and EdDSA or ed25519 in another is one key. An Ed25519 key is its 32 raw bytes. A
+    P-256 key is its point, written compressed (33 bytes) or uncompressed (65 bytes). An RSA key is its modulus and
+    exponent, written in DER as an RSAPublicKey (RFC 8017) or a SubjectPublicKeyInfo (RFC 5280); a P-256 or Ed25519
+    key in a SubjectPublicKeyInfo is the same key as its raw bytes. Bytes that are none of these are compared as
+    they are."""
+    raw = bytes.fromhex(entry["public_key_hex"])
+    key = None
+    if len(raw) in (33, 65) and raw[0] in (2, 3, 4):
+        try:
+            key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), raw)
+        except ValueError:  # not a point on the curve
+            pass
+    elif raw[:1] == b"\x30":
+        try:
+            key = serialization.load_der_public_key(raw)
+        except Exception:  # cryptography raises several types for bytes that are not a public key it reads
+            pass
+    if isinstance(key, rsa.RSAPublicKey):
+        numbers = key.public_numbers()
+        return "RSA", numbers.n, numbers.e
+    if isinstance(key, ec.EllipticCurvePublicKey):
+        return key.curve.name, key.public_bytes(serialization.Encoding.X962,
+                                                serialization.PublicFormat.UncompressedPoint)
+    if isinstance(key, Ed25519PublicKey):
+        return "bytes", key.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    return "bytes", raw
+
+
 def check_policy(policy):
     """One public key has one key reference, one holder and one role; a reference names one entry. A policy that
-    breaks this is refused as a whole: every dimension that relies on it is reported as failed. The same rule, the
-    same result and the same wording as the signatures profile's check."""
+    breaks this is refused as a whole: every dimension that relies on it is reported as failed. Keys are compared by
+    their bytes (public_key_identity), whatever their entries label the algorithm. The same rule, the same result and
+    the same wording as the signatures profile's check."""
     findings = []
     for items, ref, what in ((policy["keys"], "key_ref", "key reference"), (policy["tsas"], "tsa_ref",
                              "authority reference"), (policy["checkpoint_sources"], "source_ref", "source reference")):
@@ -167,7 +198,7 @@ def check_policy(policy):
             seen.add(item[ref])
     by_public = {}
     for k in policy["keys"]:
-        by_public.setdefault((k["algorithm"], k["public_key_hex"].lower()), []).append(k)
+        by_public.setdefault(public_key_identity(k), []).append(k)
     for group in by_public.values():
         if len(group) < 2:
             continue
