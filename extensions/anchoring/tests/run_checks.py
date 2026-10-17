@@ -152,6 +152,15 @@ def checkpoint_signed_bytes(cp):
 
 # ---------------------------------------------------------------- the verifier's trust policy
 
+def strict_hex(text):
+    """The bytes of a key written as lowercase hex pairs and nothing else, or None for any other writing: a final
+    newline, which the schema's $ lets through in some engines and bytes.fromhex would skip, an uppercase digit, a
+    space. Used where a signature is verified; the policy's duplicate check keeps the lenient read on purpose."""
+    if not isinstance(text, str) or not text or len(text) % 2 or any(c not in "0123456789abcdef" for c in text):
+        return None
+    return bytes.fromhex(text)
+
+
 def public_key_identity(entry):
     """The public key an entry lists, from its bytes alone: the entry's algorithm label plays no part, so that one key
     labelled Ed25519 in one entry and EdDSA or ed25519 in another is one key. An Ed25519 key is its 32 raw bytes. A
@@ -677,8 +686,11 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         elif s["algorithm"] != "Ed25519" or key["algorithm"] != "Ed25519":
             signature.update(status="not_supported", findings=[f"this check supports Ed25519; the checkpoint uses "
                                                                f"{s['algorithm']}"])
+        elif strict_hex(key["public_key_hex"]) is None:
+            signature.update(status="failed", findings=[f"the policy's public key for {s['key_ref']} is not written "
+                                                        "as lowercase hex pairs and nothing else"])
         else:
-            public = Ed25519PublicKey.from_public_bytes(bytes.fromhex(key["public_key_hex"]))
+            public = Ed25519PublicKey.from_public_bytes(strict_hex(key["public_key_hex"]))
             try:
                 public.verify(base64.b64decode(s["value_b64"], validate=True), checkpoint_signed_bytes(cp))
                 signature.update(status="verified", reference_source="trust_policy")
