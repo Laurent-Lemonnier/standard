@@ -693,7 +693,8 @@ def build():
     passkey("approval_passkey_rs256_label", "approval_passkey labelled WebAuthn-RS256, a suite the reference check does "
             "not support", "person-a-passkey-1", passkey_approval, presented={"algorithm": "WebAuthn-RS256"})
     passkey("approval_passkey_cross_origin", "the same approval signed in a cross-origin frame: the client data states "
-            "crossOrigin true and a topOrigin, which the check carries through as facts", "person-a-passkey-1",
+            "crossOrigin true and a topOrigin, which the check carries through as facts and fails the signature for, "
+            "since the policy cannot say which outside pages are expected", "person-a-passkey-1",
             passkey_approval, cross_origin=True, top_origin="https://top.example.org")
 
     # ---- the organisation's seals
@@ -758,6 +759,17 @@ def build():
                                                                         + b'"')).hex(),
         "digest_replacing_the_written_characters": sha256(escaped.replace(new, b'"value_b64":"'
                                                                           + b"A" * len(escaped_value) + b'"')).hex(),
+    }
+    # The copy's member written twice, which only the issuer can do: a reader that keeps the last member finds the
+    # attachment as issued, one that keeps the first does not. The profile does not read such a document.
+    twice = written.replace(old, b'"value_b64":"' + b"B" * len(value) + b'",' + old, 1)
+    if twice.count(b'"value_b64"') != 2 or json.loads(twice) != ab_approved:
+        raise ValueError("the duplicate-member writing is not what this generator expects")
+    duplicate_member = {
+        "about": "The attachment of DR-2099-101 with issuer_signature naming value_b64 twice, a placeholder first and "
+                 "the seal's value last. Not read under the profile: a reader keeping the last member would find the "
+                 "attachment as issued (a matching digest, an agreeing copy), one keeping the first neither.",
+        "attachment_text": twice.decode("utf-8"),
     }
     mk_seal("seal_attachment_wrong_rule", "a seal over the digest of the attachment's bytes with the embedded copy's "
             "value present, not replaced by A", "org-seal-1",
@@ -1101,6 +1113,7 @@ def build():
         "view": {"text": VIEW, "digest": view_digest},
         "action_binding_attachments": action_binding,
         "escaped_copy": escaped_copy,
+        "duplicate_member": duplicate_member,
         "certificates": certificates,
         "person_signatures": persons,
         "organisation_seals": seals,

@@ -179,7 +179,7 @@
       "properties": {
         "user_present": {"type": "boolean"},
         "user_verified": {"type": "boolean"},
-        "cross_origin": {"type": "boolean", "description": "The client data's crossOrigin, when it states one."},
+        "cross_origin": {"type": "boolean", "description": "The client data's crossOrigin, when it states one. True fails the signature: the policy cannot say which outside pages are expected."},
         "top_origin": {"type": "string", "minLength": 1, "description": "The client data's topOrigin, when it states one."}
       }
     },
@@ -218,12 +218,12 @@
           }
         },
         {
-          "description": "A verified WebAuthn signature reports the authenticator's flags, with the user present.",
+          "description": "A verified WebAuthn signature reports the authenticator's flags, with the user present, and was not made from an outside page (no crossOrigin true, no topOrigin).",
           "if": {
             "properties": {"signature": {"properties": {"status": {"const": "verified"}, "algorithm": {"const": "WebAuthn-ES256"}}, "required": ["status", "algorithm"]}},
             "required": ["signature"]
           },
-          "then": {"required": ["authenticator"], "properties": {"authenticator": {"properties": {"user_present": {"const": true}}}}}
+          "then": {"required": ["authenticator"], "properties": {"authenticator": {"properties": {"user_present": {"const": true}, "cross_origin": {"const": false}}, "not": {"required": ["top_origin"]}}}}
         },
         {
           "if": {"properties": {"signature": {"properties": {"status": {"enum": ["failed", "not_checked", "unavailable", "not_supported"]}}, "required": ["status"]}}, "required": ["signature"]},
