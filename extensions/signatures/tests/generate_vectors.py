@@ -482,7 +482,8 @@ def make_person(keys, key_name, body, presented=None, signed_as=None):
 
 
 def make_passkey(keys, key_name, body, *, rp_id=RP_ID, origin=ORIGIN, flags=0x05, type_="webauthn.get",
-                 challenge_over=None, sign_count=7, presented=None, cross_origin=False, top_origin=None):
+                 challenge_over=None, sign_count=7, presented=None, cross_origin=False, top_origin=None,
+                 duplicate_cross_origin=False):
     """A person's assertion signed with a WebAuthn passkey (ES256). The authenticator signs
     authenticatorData || SHA-256(clientDataJSON); the challenge in clientDataJSON is SHA-256 of the signed bytes,
     in base64url without padding, as a browser writes it."""
@@ -494,6 +495,8 @@ def make_passkey(keys, key_name, body, *, rp_id=RP_ID, origin=ORIGIN, flags=0x05
     if top_origin:
         client["topOrigin"] = top_origin
     client_data = json.dumps(client, separators=(",", ":")).encode("utf-8")
+    if duplicate_cross_origin:  # crossOrigin named twice, true first and false last: a writing no browser makes
+        client_data = client_data.replace(b'"crossOrigin":false', b'"crossOrigin":true,"crossOrigin":false', 1)
     authenticator_data = sha256(rp_id.encode("utf-8")) + bytes([flags]) + sign_count.to_bytes(4, "big")
     signature = keys[key_name].sign(authenticator_data + sha256(client_data),
                                     ec.ECDSA(hashes.SHA256(), deterministic_signing=True))
@@ -534,6 +537,18 @@ def build():
         if seal[k] != v:
             raise ValueError(f"{k}: the record no longer matches the portable verification fixture")
     exports, links = build_exports(seal)
+    # An export whose entry's covered bytes name actor_identity twice, another actor first and the real one last,
+    # sealed as written: the affirmed digest matches, and the bytes are not read, so no actor is compared.
+    marker = '"actor_identity":"owner-example-1"'
+    if RECORDS["R0"].count(marker) != 1:
+        raise ValueError("R0 does not name owner-example-1 once as the affirming actor")
+    r0_dup = RECORDS["R0"].replace(marker, '"actor_identity":"someone-else-1",' + marker, 1)
+    seal_dup = sha256(r0_dup.encode("utf-8")).hex()
+    dup_entry = export_entry("R0", seal, 0, None)
+    dup_entry["content"]["covered_bytes_b64"] = b64(r0_dup.encode("utf-8"))
+    dup_entry["seal"]["seal_hash"] = seal_dup
+    exports["duplicate_actor"] = {"profile": "dps-portable-verification", "profile_version": "0.1.0",
+                                  "entries": [dup_entry]}
     if exports["full"] != anchoring["exports"]["full"] or exports["extended"] != anchoring["exports"]["extended"]:
         raise ValueError("the exports no longer match the anchoring fixtures")
     spec_digest = sha256(SPECIFICATION.encode("utf-8")).hex()
@@ -662,6 +677,9 @@ def build():
            "bytes the Standard seals", "person-a-1",
            dict(affirmation_r0, affirmed_digest=sha256(compact(r0_without_affirmation)).hex()))
     person("affirmation_r0_by_org", "org-seal-1 signs a person's affirmation", "org-seal-1", affirmation_r0)
+    person("affirmation_r0_dup", "person-a-1 affirms DR-2099-001 as sealed in the duplicate_actor export, whose covered "
+           "bytes name actor_identity twice: the digest matches, the bytes are not read, no actor is compared",
+           "person-a-1", dict(affirmation_r0, affirmed_digest=seal_dup))
     person("affirmation_r2", "person-a-1 affirms DR-2099-003, whose covered bytes carry the seal field zeroed",
            "person-a-1", {"assertion": "person_affirmation", "decision_id": "DR-2099-003",
                           "affirmed_digest": seal["R2"], "signed_at": "2026-09-27T10:00:00Z"})
@@ -703,6 +721,9 @@ def build():
     passkey("approval_passkey_cross_origin_text", "crossOrigin written as the text \"true\", which no browser writes: "
             "not a same-origin ceremony, so it fails; carried as no fact, since it is not a boolean",
             "person-a-passkey-1", passkey_approval, cross_origin="true")
+    passkey("approval_passkey_dup_cross_origin", "client data naming crossOrigin twice, true first and false last: not "
+            "read, so the signature fails; a last-member reader would see a same-origin ceremony",
+            "person-a-passkey-1", passkey_approval, duplicate_cross_origin=True)
 
     # ---- the organisation's seals
     seals = {}
@@ -787,8 +808,8 @@ def build():
         raise ValueError("the deep duplicate-member writing is not what this generator expects")
     duplicate_member_deep = {
         "about": "The attachment of DR-2099-101 with the approved outcome stage naming approved_spec_digest twice, 64 "
-                 "zeros first and the digest last. Not read under the profile: the seal verifies for every reader, a "
-                 "last-member reader sees the digest, a first-member reader sees zeros.",
+                 "zeros first and the digest last. Not read under the profile: the seal would verify for every reader, if the "
+                 "issuer sealed this writing; a last-member reader would see the digest, a first-member reader zeros.",
         "attachment_text": deep.decode("utf-8"),
         "differs_at": f"/stages/{stage}/approved_spec_digest",
     }
