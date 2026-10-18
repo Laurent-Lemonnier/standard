@@ -179,7 +179,7 @@
       "properties": {
         "user_present": {"type": "boolean"},
         "user_verified": {"type": "boolean"},
-        "cross_origin": {"type": "boolean", "description": "The client data's crossOrigin, when it states one. True fails the signature: the policy cannot say which outside pages are expected."},
+        "cross_origin": {"type": "boolean", "description": "The client data's crossOrigin, when it states a boolean. Anything but false, or no crossOrigin at all, fails the signature: the policy cannot say which outside pages are expected."},
         "top_origin": {"type": "string", "minLength": 1, "description": "The client data's topOrigin, when it states one."}
       }
     },

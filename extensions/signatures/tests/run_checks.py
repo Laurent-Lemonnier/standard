@@ -511,19 +511,28 @@ def record_entry(export, decision_id):
     return next((e for e in export["entries"] if e["decision_id"] == decision_id and "seal" in e), None)
 
 
-def entry_actor(entry):
-    """affirmation_record.actor_identity from covered bytes that match the entry's seal, or None."""
+def covered_record(entry):
+    """The record read from covered bytes that match the entry's seal: (record, None); (None, None) where there are
+    no such bytes; (None, reason) where the bytes match the seal but are not read, a member named twice among them."""
     if entry["content"]["availability"] != "available":
-        return None
+        return None, None
     if entry["covered_representation"]["media_type"] not in READABLE:
-        return None
+        return None, None
     try:
         raw = b64decode(entry["content"]["covered_bytes_b64"])
-        if sha256(raw).hex() != entry["seal"]["seal_hash"]:
-            return None
-        record = strict_json(raw)
     except (ValueError, TypeError):
-        return None
+        return None, None
+    if sha256(raw).hex() != entry["seal"]["seal_hash"]:
+        return None, None
+    try:
+        return strict_json(raw), None
+    except ValueError as exc:
+        return None, f"the covered bytes of {entry['decision_id']} match the seal but are not read: {exc}"
+
+
+def entry_actor(entry):
+    """affirmation_record.actor_identity from covered bytes that match the entry's seal and are read, or None."""
+    record, _ = covered_record(entry)
     actor = ((record.get("affirmation_record") if isinstance(record, dict) else None) or {}).get("actor_identity")
     return actor if isinstance(actor, str) and actor else None
 
@@ -553,6 +562,9 @@ def check_person_subject(ps, ctx):
         if entry is None:
             return {"status": "not_checked", "findings": [f"the export holds no sealed entry for {ps['decision_id']}"]}, None
         status, findings = digest_against_entry(ps["affirmed_digest"], entry, "the affirmed digest")
+        _, not_read = covered_record(entry)
+        if not_read:  # the digest stands; the actor the issuer names is not read from these bytes
+            findings = findings + [not_read]
         out = {"status": status, "checked_against": "export_entry",
                "covers_affirmation_record": entry["seal"]["affirmation_record_covered"]}
         if findings:
@@ -1212,7 +1224,7 @@ def errors(validator, doc):
 def schema_case(c, v, validators):
     base = pointer_get(v, c["base"])
     if c["schema"] == "core_record":
-        base = json.loads(base)
+        base = strict_json(base.encode("utf-8"))
     doc = apply_patch(base, c["patch"], v)
     found = errors(validators[c["schema"]], doc)
     return ("pass" if not found else "fail"), found
@@ -1247,7 +1259,7 @@ def vector_case(c, v):
         bad = [k for k, r in v["records"].items() if sha256(r["text"].encode("utf-8")).hex() != r["seal_hash"]]
         bad += [k for k, h in c["published"].items() if v["records"][k]["seal_hash"] != h]
     elif kind == "anchoring_fixtures":
-        anchoring = json.loads(ANCHORING_VECTORS.read_text(encoding="utf-8"))
+        anchoring = strict_json(ANCHORING_VECTORS.read_bytes())
         bad = [n for n in c["exports"] if v["exports"][n] != anchoring["exports"][n]]
         bad += [n for n in c["keys"] if v["test_keys"][n] != anchoring["test_keys"][n]]
         bad += [n for n in c["certificates"]
@@ -1322,16 +1334,22 @@ def vector_case(c, v):
             if not sig.get("authenticator_data_b64"):
                 continue
             w, client_raw, auth = x["webauthn"], b64decode(sig["client_data_json_b64"]), b64decode(sig["authenticator_data_b64"])
-            client = json.loads(client_raw)
+            try:
+                client = strict_json(client_raw)
+            except ValueError:  # a client data that names a member twice is not read (not_read lists them)
+                client = None
+            if (client is None) != (n in c.get("not_read", [])):
+                bad.append(f"{n}: client data " + ("not read" if client is None else "read, though it names a member twice"))
             expected_challenge = base64.urlsafe_b64encode(sha256(bytes.fromhex(x["signed_bytes_hex"]))).rstrip(b"=").decode()
-            if n not in c["other_challenge"] and (client["challenge"] != expected_challenge
-                                                  or w["challenge_b64url"] != expected_challenge):
-                bad.append(f"{n}: challenge")
-            if client["type"] != w["type"] or client["origin"] != w["origin"]:
-                bad.append(f"{n}: client data")
-            if (client.get("crossOrigin", False) != w.get("cross_origin", False)
-                    or client.get("topOrigin") != w.get("top_origin")):
-                bad.append(f"{n}: cross-origin statements")
+            if client is not None:
+                if n not in c["other_challenge"] and (client["challenge"] != expected_challenge
+                                                      or w["challenge_b64url"] != expected_challenge):
+                    bad.append(f"{n}: challenge")
+                if client["type"] != w["type"] or client["origin"] != w["origin"]:
+                    bad.append(f"{n}: client data")
+                if (client.get("crossOrigin", False) != w.get("cross_origin", False)
+                        or client.get("topOrigin") != w.get("top_origin")):
+                    bad.append(f"{n}: cross-origin statements")
             if auth[:32] != sha256(w["rp_id"].encode()) or auth[32] != int(w["flags_hex"], 16):
                 bad.append(f"{n}: authenticator data")
             if (auth + sha256(client_raw)).hex() != w["authenticator_signed_hex"]:
@@ -1376,7 +1394,7 @@ def vector_case(c, v):
         written, value = e["attachment_text"].encode("utf-8"), att["issuer_signature"]["value_b64"]
         if "\\/" not in e["value_as_written"] or e["value_as_written"].replace("\\/", "/") != value:
             bad.append("the written value")
-        if json.loads(written) != att or compact(att) == written:
+        if strict_json(written) != att or compact(att) == written:
             bad.append("the writing")
         if (len(value), len(e["value_as_written"])) != (e["value_characters"], e["written_characters"]):
             bad.append("the counts")
@@ -1571,15 +1589,15 @@ def main():
     v = strict_json((HERE / "vectors.json").read_bytes())
     validators = {}
     for name, p in SCHEMAS.items():
-        schema = json.loads(p.read_text(encoding="utf-8"))
+        schema = strict_json(p.read_bytes())
         Draft202012Validator.check_schema(schema)
         validators[name] = Draft202012Validator(schema)
         print(f"[ok  ] schemas/{p.name}: valid JSON Schema 2020-12")
-    defs = json.loads(SCHEMAS["attachment"].read_text(encoding="utf-8"))["$defs"]
+    defs = strict_json(SCHEMAS["attachment"].read_bytes())["$defs"]
     for name in ("person_signature", "organisation_seal", "timestamp"):
         validators[name] = Draft202012Validator({"$ref": f"#/$defs/{name}", "$defs": defs})
     for name, p in OTHER_SCHEMAS.items():
-        validators[name] = Draft202012Validator(json.loads(p.read_text(encoding="utf-8")))
+        validators[name] = Draft202012Validator(strict_json(p.read_bytes()))
     print(f"[ok  ] the trust policy is anchoring's: {OTHER_SCHEMAS['trust_policy'].relative_to(ROOT).as_posix()}")
 
     same = lambda c: c["expected"]  # noqa: E731
