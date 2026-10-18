@@ -696,6 +696,13 @@ def build():
             "crossOrigin true and a topOrigin, which the check carries through as facts and fails the signature for, "
             "since the policy cannot say which outside pages are expected", "person-a-passkey-1",
             passkey_approval, cross_origin=True, top_origin="https://top.example.org")
+    passkey("approval_passkey_cross_origin_only", "crossOrigin true with no topOrigin: fails all the same",
+            "person-a-passkey-1", passkey_approval, cross_origin=True)
+    passkey("approval_passkey_top_origin_only", "crossOrigin false with a topOrigin: fails all the same",
+            "person-a-passkey-1", passkey_approval, top_origin="https://top.example.org")
+    passkey("approval_passkey_cross_origin_text", "crossOrigin written as the text \"true\", which no browser writes: "
+            "not a same-origin ceremony, so it fails; carried as no fact, since it is not a boolean",
+            "person-a-passkey-1", passkey_approval, cross_origin="true")
 
     # ---- the organisation's seals
     seals = {}
@@ -770,6 +777,20 @@ def build():
                  "the seal's value last. Not read under the profile: a reader keeping the last member would find the "
                  "attachment as issued (a matching digest, an agreeing copy), one keeping the first neither.",
         "attachment_text": twice.decode("utf-8"),
+        "differs_at": "/issuer_signature/value_b64",
+    }
+    # The same, deeper: the approved outcome stage naming its approved digest twice, zeros first and the digest last.
+    stage = next(i for i, st in enumerate(ab_approved["stages"]) if "approved_spec_digest" in st)
+    old_d = f'"approved_spec_digest":"{ab_approved["stages"][stage]["approved_spec_digest"]}"'.encode("utf-8")
+    deep = written.replace(old_d, b'"approved_spec_digest":"' + b"0" * 64 + b'",' + old_d, 1)
+    if written.count(old_d) < 1 or deep == written or json.loads(deep) != ab_approved:
+        raise ValueError("the deep duplicate-member writing is not what this generator expects")
+    duplicate_member_deep = {
+        "about": "The attachment of DR-2099-101 with the approved outcome stage naming approved_spec_digest twice, 64 "
+                 "zeros first and the digest last. Not read under the profile: the seal verifies for every reader, a "
+                 "last-member reader sees the digest, a first-member reader sees zeros.",
+        "attachment_text": deep.decode("utf-8"),
+        "differs_at": f"/stages/{stage}/approved_spec_digest",
     }
     mk_seal("seal_attachment_wrong_rule", "a seal over the digest of the attachment's bytes with the embedded copy's "
             "value present, not replaced by A", "org-seal-1",
@@ -1114,6 +1135,7 @@ def build():
         "action_binding_attachments": action_binding,
         "escaped_copy": escaped_copy,
         "duplicate_member": duplicate_member,
+        "duplicate_member_deep": duplicate_member_deep,
         "certificates": certificates,
         "person_signatures": persons,
         "organisation_seals": seals,

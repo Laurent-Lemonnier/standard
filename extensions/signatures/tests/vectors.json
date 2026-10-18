@@ -444,7 +444,13 @@
   },
   "duplicate_member": {
     "about": "The attachment of DR-2099-101 with issuer_signature naming value_b64 twice, a placeholder first and the seal's value last. Not read under the profile: a reader keeping the last member would find the attachment as issued (a matching digest, an agreeing copy), one keeping the first neither.",
-    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.2.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.1.0 organisation_seal\",\"value_b64\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\",\"value_b64\":\"QksWzTEpexh9hSURvmPzLTX5Mj4PXdHgmo7i0//dYS/2VjSO0DilTd8Z7nF3aYO0a8oJY6A8w4/xCVjn6O3VCw==\"}}"
+    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.2.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.1.0 organisation_seal\",\"value_b64\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\",\"value_b64\":\"QksWzTEpexh9hSURvmPzLTX5Mj4PXdHgmo7i0//dYS/2VjSO0DilTd8Z7nF3aYO0a8oJY6A8w4/xCVjn6O3VCw==\"}}",
+    "differs_at": "/issuer_signature/value_b64"
+  },
+  "duplicate_member_deep": {
+    "about": "The attachment of DR-2099-101 with the approved outcome stage naming approved_spec_digest twice, 64 zeros first and the digest last. Not read under the profile: the seal verifies for every reader, a last-member reader sees the digest, a first-member reader sees zeros.",
+    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.2.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.1.0 organisation_seal\",\"value_b64\":\"QksWzTEpexh9hSURvmPzLTX5Mj4PXdHgmo7i0//dYS/2VjSO0DilTd8Z7nF3aYO0a8oJY6A8w4/xCVjn6O3VCw==\"}}",
+    "differs_at": "/stages/2/approved_spec_digest"
   },
   "certificates": {
     "org-seal-1": {
@@ -1470,6 +1476,106 @@
         "top_origin": "https://top.example.org",
         "flags_hex": "05",
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000007f51650ef7d1996e2822db0d3edf269aaf2c4312acca9f69194c0f6e99d1caaef"
+      }
+    },
+    "approval_passkey_cross_origin_only": {
+      "about": "crossOrigin true with no topOrigin: fails all the same",
+      "signed_with": "person-a-passkey-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.1.0",
+        "assertion": "person_approval",
+        "decision_id": "DR-2099-101",
+        "stage_id": "o1",
+        "outcome": "approved",
+        "shown_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "approved_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "signed_at": "2026-10-01T09:12:30Z",
+        "signature": {
+          "algorithm": "WebAuthn-ES256",
+          "key_ref": "person-a-passkey-1",
+          "value_b64": "MEUCIFGbXcMfLAqHuAnSVSPFQvMAmW0ia5AyOSNWW6/7GpLfAiEAp7T9juXg9jANKZSvJMvU3YHkkbL4R8MekF+IrWbMmjs=",
+          "authenticator_data_b64": "v6vDdDKViwYzYNOtZGHJxHNa5/jt1GWSpeDwFFKy5LUFAAAABw==",
+          "client_data_json_b64": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiYVg5eGJuSGhnSW40cnl3MGNCU1kybE9jSFk1d0ozYzVvTTBpdE54elROUSIsIm9yaWdpbiI6Imh0dHBzOi8vZXhhbXBsZS5vcmciLCJjcm9zc09yaWdpbiI6dHJ1ZX0="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e312e300000000f706572736f6e5f617070726f76616c00000012706572736f6e2d612d706173736b65792d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e900000014323032362d31302d30315430393a31323a33305a",
+      "webauthn": {
+        "challenge_b64url": "aX9xbnHhgIn4ryw0cBSY2lOcHY5wJ3c5oM0itNxzTNQ",
+        "rp_id": "example.org",
+        "origin": "https://example.org",
+        "type": "webauthn.get",
+        "cross_origin": true,
+        "flags_hex": "05",
+        "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b505000000070436936f534893df895d723b4dfe3906409edafa467044a2ef12d1b49f31a677"
+      }
+    },
+    "approval_passkey_top_origin_only": {
+      "about": "crossOrigin false with a topOrigin: fails all the same",
+      "signed_with": "person-a-passkey-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.1.0",
+        "assertion": "person_approval",
+        "decision_id": "DR-2099-101",
+        "stage_id": "o1",
+        "outcome": "approved",
+        "shown_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "approved_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "signed_at": "2026-10-01T09:12:30Z",
+        "signature": {
+          "algorithm": "WebAuthn-ES256",
+          "key_ref": "person-a-passkey-1",
+          "value_b64": "MEUCIQCo0hsJn4LmlmSJs4Q78l+FZTx7UTtt7QfzQ/ysBqK2CwIgBbrBlC0hjmTOaQtCO6T5JJV7e+zVejOutwiKvlDkVmc=",
+          "authenticator_data_b64": "v6vDdDKViwYzYNOtZGHJxHNa5/jt1GWSpeDwFFKy5LUFAAAABw==",
+          "client_data_json_b64": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiYVg5eGJuSGhnSW40cnl3MGNCU1kybE9jSFk1d0ozYzVvTTBpdE54elROUSIsIm9yaWdpbiI6Imh0dHBzOi8vZXhhbXBsZS5vcmciLCJjcm9zc09yaWdpbiI6ZmFsc2UsInRvcE9yaWdpbiI6Imh0dHBzOi8vdG9wLmV4YW1wbGUub3JnIn0="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e312e300000000f706572736f6e5f617070726f76616c00000012706572736f6e2d612d706173736b65792d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e900000014323032362d31302d30315430393a31323a33305a",
+      "webauthn": {
+        "challenge_b64url": "aX9xbnHhgIn4ryw0cBSY2lOcHY5wJ3c5oM0itNxzTNQ",
+        "rp_id": "example.org",
+        "origin": "https://example.org",
+        "type": "webauthn.get",
+        "cross_origin": false,
+        "top_origin": "https://top.example.org",
+        "flags_hex": "05",
+        "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000007de623d15c65df0d9a5609fdef4293d32e123d0d2f382609afb823e3126c9c3b3"
+      }
+    },
+    "approval_passkey_cross_origin_text": {
+      "about": "crossOrigin written as the text \"true\", which no browser writes: not a same-origin ceremony, so it fails; carried as no fact, since it is not a boolean",
+      "signed_with": "person-a-passkey-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.1.0",
+        "assertion": "person_approval",
+        "decision_id": "DR-2099-101",
+        "stage_id": "o1",
+        "outcome": "approved",
+        "shown_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "approved_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "signed_at": "2026-10-01T09:12:30Z",
+        "signature": {
+          "algorithm": "WebAuthn-ES256",
+          "key_ref": "person-a-passkey-1",
+          "value_b64": "MEQCIB4cleS+/pzjcxWgsK9F0JHoJRuaTGFdVTrmYRUuu54mAiBZwLYilEt2UYe7YnPax6Q3zexnNHGJmKU+E8QLWWJoOQ==",
+          "authenticator_data_b64": "v6vDdDKViwYzYNOtZGHJxHNa5/jt1GWSpeDwFFKy5LUFAAAABw==",
+          "client_data_json_b64": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiYVg5eGJuSGhnSW40cnl3MGNCU1kybE9jSFk1d0ozYzVvTTBpdE54elROUSIsIm9yaWdpbiI6Imh0dHBzOi8vZXhhbXBsZS5vcmciLCJjcm9zc09yaWdpbiI6InRydWUifQ=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e312e300000000f706572736f6e5f617070726f76616c00000012706572736f6e2d612d706173736b65792d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e900000014323032362d31302d30315430393a31323a33305a",
+      "webauthn": {
+        "challenge_b64url": "aX9xbnHhgIn4ryw0cBSY2lOcHY5wJ3c5oM0itNxzTNQ",
+        "rp_id": "example.org",
+        "origin": "https://example.org",
+        "type": "webauthn.get",
+        "cross_origin": "true",
+        "flags_hex": "05",
+        "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b505000000079159afb103b5ff74f1d99d6ffb1e63fb6b8248a7c80db6f460ab82bdb68e6959"
       }
     }
   },
