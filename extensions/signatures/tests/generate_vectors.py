@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Writes vectors.json for the signatures extension, version 0.1.0 (a proposal).
+"""Writes vectors.json for the signatures extension, version 0.2.0 (a proposal).
 
 TEST KEYS ONLY. Every key below is derived from a published text, so anyone can recompute it. Never derive a real
 key this way, and never trust anything signed by one of these keys.
 
   seed                      SHA-256 of the UTF-8 text "dps-signatures 0.1.0 test key " followed by the key's name
+                            (the text of the first version, kept in 0.2.0 so that the test keys do not change)
   Ed25519 (person, seal)    the seed is the private key (RFC 8032, section 5.1.5)
   ECDSA P-256 (passkey)     the private scalar is (the seed read as a big-endian integer) mod (n - 1), plus 1
 
@@ -50,7 +51,7 @@ ROOT = HERE.parents[2]
 OUT = HERE / "vectors.json"
 ANCHORING_VECTORS = ROOT / "extensions" / "anchoring" / "tests" / "vectors.json"
 
-PROFILE, VERSION = "dps-signatures", "0.1.0"
+PROFILE, VERSION = "dps-signatures", "0.2.0"
 ANCHORING_VERSION = "0.2.0"  # the anchoring version this profile is written against; the trust policy is its
 SEED_PREFIX = "dps-signatures 0.1.0 test key "
 ANCHORING_SEED_PREFIX = "dps-anchoring 0.1.0 test key "
@@ -524,7 +525,7 @@ def make_seal(keys, key_name, sealed, sealed_at, presented=None, signed_as=None)
 
 def embedded_signature(key_ref, value_b64):
     """Action binding 0.2.0's issuer_signature member, holding a copy of the organisation's seal."""
-    return {"algorithm": "Ed25519", "key_ref": key_ref, "signed_bytes_ref": "dps-signatures 0.1.0 organisation_seal",
+    return {"algorithm": "Ed25519", "key_ref": key_ref, "signed_bytes_ref": f"{PROFILE} {VERSION} organisation_seal",
             "value_b64": value_b64}
 
 
@@ -616,8 +617,8 @@ def build():
            approval, presented={"key_ref": "person-b-0"})
     person("approval_a_other_profile", "the key signed the same fields under profile dps-anchoring", "person-a-1",
            approval, signed_as={"profile": "dps-anchoring"})
-    person("approval_a_other_version", "the key signed the same fields under profile_version 0.2.0", "person-a-1",
-           approval, signed_as={"version": "0.2.0"})
+    person("approval_a_other_version", "the key signed the same fields under profile_version 0.3.0", "person-a-1",
+           approval, signed_as={"version": "0.3.0"})
     person("approval_a_other_type", "the key signed the same fields under assertion type organisation_seal",
            "person-a-1", approval, signed_as={"assertion": "organisation_seal"})
     person("approval_a_view_dropped", "signed with no view digest (the empty field), presented with the review's view "
@@ -834,8 +835,8 @@ def build():
             "org-seal-1", record_r0, "2026-09-25T11:30:00Z", presented={"key_ref": "org-seal-0"})
     mk_seal("seal_record_other_profile", "the key signed the same fields under profile dps-anchoring", "org-seal-1",
             record_r0, "2026-09-25T11:30:00Z", signed_as={"profile": "dps-anchoring"})
-    mk_seal("seal_record_other_version", "the key signed the same fields under profile_version 0.2.0", "org-seal-1",
-            record_r0, "2026-09-25T11:30:00Z", signed_as={"version": "0.2.0"})
+    mk_seal("seal_record_other_version", "the key signed the same fields under profile_version 0.3.0", "org-seal-1",
+            record_r0, "2026-09-25T11:30:00Z", signed_as={"version": "0.3.0"})
     mk_seal("seal_record_other_type", "the key signed the same fields under assertion type checkpoint", "org-seal-1",
             record_r0, "2026-09-25T11:30:00Z", signed_as={"assertion": "checkpoint"})
     mk_seal("seal_record_kind_changed", "signed as a record, presented as an attachment", "org-seal-1", record_r0,

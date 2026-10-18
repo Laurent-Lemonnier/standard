@@ -10,7 +10,7 @@
   "anyOf": [{"required": ["person_signatures"]}, {"required": ["organisation_seals"]}],
   "properties": {
     "profile": {"const": "dps-signatures"},
-    "profile_version": {"const": "0.1.0"},
+    "profile_version": {"const": "0.2.0"},
     "person_signatures": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/person_signature"}},
     "organisation_seals": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/organisation_seal"}},
     "timestamps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/timestamp"}}
@@ -61,7 +61,7 @@
       "required": ["profile", "profile_version", "assertion", "decision_id", "stage_id", "outcome", "shown_spec_digest", "approved_spec_digest", "signed_at", "signature"],
       "properties": {
         "profile": {"const": "dps-signatures"},
-        "profile_version": {"const": "0.1.0"},
+        "profile_version": {"const": "0.2.0"},
         "assertion": {"const": "person_approval"},
         "decision_id": {"$ref": "#/$defs/decision_id"},
         "stage_id": {"$ref": "#/$defs/stage_id", "description": "The outcome stage, in the action-binding attachment of this record."},
@@ -80,7 +80,7 @@
       "required": ["profile", "profile_version", "assertion", "decision_id", "stage_id", "outcome", "shown_spec_digest", "signed_at", "signature"],
       "properties": {
         "profile": {"const": "dps-signatures"},
-        "profile_version": {"const": "0.1.0"},
+        "profile_version": {"const": "0.2.0"},
         "assertion": {"const": "person_review"},
         "decision_id": {"$ref": "#/$defs/decision_id"},
         "stage_id": {"$ref": "#/$defs/stage_id"},
@@ -98,7 +98,7 @@
       "required": ["profile", "profile_version", "assertion", "decision_id", "affirmed_digest", "signed_at", "signature"],
       "properties": {
         "profile": {"const": "dps-signatures"},
-        "profile_version": {"const": "0.1.0"},
+        "profile_version": {"const": "0.2.0"},
         "assertion": {"const": "person_affirmation"},
         "decision_id": {"$ref": "#/$defs/decision_id"},
         "affirmed_digest": {"$ref": "#/$defs/sha256_hex"},
@@ -113,7 +113,7 @@
       "required": ["profile", "profile_version", "assertion", "sealed", "sealed_at", "signature"],
       "properties": {
         "profile": {"const": "dps-signatures"},
-        "profile_version": {"const": "0.1.0"},
+        "profile_version": {"const": "0.2.0"},
         "assertion": {"const": "organisation_seal"},
         "sealed": {
           "type": "object",
