@@ -422,12 +422,13 @@ def webauthn_verify(key, sig, made_over):
             flags["cross_origin"] = client["crossOrigin"]
         if isinstance(client.get("topOrigin"), str) and client["topOrigin"]:
             flags["top_origin"] = client["topOrigin"]
-    if client.get("crossOrigin") is True or "topOrigin" in client:
+    if client.get("crossOrigin", False) is not False or "topOrigin" in client:
         # WebAuthn Level 3, 13.4.9: a relying party validates that a topOrigin is expected. The verifier plays that
         # part through its policy, whose entry cannot yet name expected outside pages, so a framed signature fails.
-        findings.append(f"the client data states an outside page (crossOrigin {client.get('crossOrigin')!r}, topOrigin "
-                        f"{client.get('topOrigin')!r}); the policy's entry for {key['key_ref']} names no expected "
-                        "outside page, so a signature made from one fails")
+        # A same-origin ceremony writes crossOrigin false or nothing; anything else is not that, whatever its type.
+        findings.append(f"the client data does not state a same-origin ceremony (crossOrigin {client.get('crossOrigin')!r},"
+                        f" topOrigin {client.get('topOrigin')!r}); the policy's entry for {key['key_ref']} names no "
+                        "expected outside page, so a signature made from one fails")
     raw = strict_hex(key["public_key_hex"])
     if raw is None:
         findings.append(f"the policy's public key for {key['key_ref']} is not written as lowercase hex pairs and "
@@ -1392,9 +1393,9 @@ def vector_case(c, v):
         if by_writing == sealed:
             bad.append("replacing the written characters gives the sealed digest")
     elif kind == "duplicate_member":
-        # issuer_signature naming value_b64 twice: not read. A reader keeping the last member would find the
-        # attachment as issued; one keeping the first would not.
-        e, att = v["duplicate_member"], v["action_binding_attachments"][c["decision_id"]]
+        # A document naming a member twice, at any depth: not read. A reader keeping the last member would find the
+        # attachment as issued; one keeping the first would read another document (at differs_at).
+        e, att = pointer_get(v, c["vector"]), v["action_binding_attachments"][c["decision_id"]]
         raw = e["attachment_text"].encode("utf-8")
         try:
             strict_json(raw)
@@ -1404,7 +1405,7 @@ def vector_case(c, v):
         if json.loads(raw) != att:  # json.loads keeps the last member
             bad.append("the last-member reading")
         first = json.loads(raw, object_pairs_hook=lambda items: dict(reversed(items)))  # keeps the first member
-        if first["issuer_signature"]["value_b64"] == att["issuer_signature"]["value_b64"]:
+        if pointer_get(first, e["differs_at"]) == pointer_get(att, e["differs_at"]):
             bad.append("the first-member reading")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
@@ -1565,8 +1566,9 @@ def pairing_case(c, v, validators):
 
 def main():
     sys.stdout.reconfigure(errors="backslashreplace")  # some cases hold text with no UTF-8 encoding, on purpose
-    cases = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
-    v = json.loads((HERE / "vectors.json").read_text(encoding="utf-8"))
+    # Every document this check reads, its fixtures included, is read with duplicate members rejected (I-JSON).
+    cases = strict_json((HERE / "cases.json").read_bytes())
+    v = strict_json((HERE / "vectors.json").read_bytes())
     validators = {}
     for name, p in SCHEMAS.items():
         schema = json.loads(p.read_text(encoding="utf-8"))
