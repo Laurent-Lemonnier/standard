@@ -10,7 +10,7 @@
 
 This extension says how to anchor sealed decision records with evidence from outside the issuer, and how a check of that evidence reports what it found. It defines two assertions: an independent timestamp, which shows that exact bytes existed by a time, and an independent checkpoint, which fixes a chain of records at one point. Each is an object beside the export or the records. Neither adds a field to a decision record, and neither stands for the other.
 
-It is the first of two related profiles agreed in issue #29. The second, signatures (the person's signature and the organisation's seal), will come later and reuse the signed-bytes rule and the key states defined here.
+It is the first of two related profiles agreed in issue #29. The second, [signatures](../signatures/) (the person's signature and the organisation's seal), has been in the repository since #34 and reuses the signed-bytes rule and the key states defined here.
 
 Version 0.2.0 changes 0.1.0 after review, and 0.1.0 documents are no longer valid. Each document states its version, and a checkpoint's signed bytes include it, so a 0.1.0 checkpoint does not verify as a 0.2.0 one. A checkpoint's `count` is now at most 2^53 - 1, a trust policy that lists one public key twice is refused, and a report says whether the policy was accepted. The reference check now gives a result for every input valid against the schemas, where 0.1.0 could stop on some, and reads an ESSCertIDv2 made with a hash other than SHA-256 as if there were none. The vectors now include a text field that is not ASCII, and RSA tokens: the reference check verifies RSA PKCS#1 v1.5 as well as ECDSA P-256, with the RSA test key RFC 9500 publishes. For the signatures profile, the shared rule now says how an absent optional value is signed, a timestamp's subject can name an assertion of that profile, and a key in the trust policy can carry what that profile needs.
 
@@ -63,7 +63,7 @@ In this profile, one assertion type is signed under the rule:
 
 A checkpoint's `count` is at most 2^53 - 1 (9007199254740991): JSON readers agree exactly on every integer up to that (RFC 8259 §6), and may round a larger one. That is the same reason the rule uses length prefixes, and not a canonical JSON such as JCS (RFC 8785).
 
-A checkpoint is signed with Ed25519 (RFC 8032), over the signed bytes themselves. The signatures profile will add its own assertion types and field orders under this rule. For example, the test checkpoint `cp_a` in `tests/vectors.json` (key `witness-a-1`, chain `urn:example:chain:issuer-1`, count 3, at 2026-09-27T12:00:00Z) has these 165 signed bytes:
+A checkpoint is signed with Ed25519 (RFC 8032), over the signed bytes themselves. The signatures profile adds its own assertion types and field orders under this rule. For example, the test checkpoint `cp_a` in `tests/vectors.json` (key `witness-a-1`, chain `urn:example:chain:issuer-1`, count 3, at 2026-09-27T12:00:00Z) has these 165 signed bytes:
 
 ```
 4450532d534947 00                                                      "DPS-SIG" 0x00
@@ -167,7 +167,6 @@ This extension reuses, by reference, portable verification's export and covered 
 
 Not in this version, and future work:
 
-- The signatures profile: the person's signature and the organisation's seal, under the same signed-bytes rule and key states.
 - Portable verification 0.2.0 and action binding 0.3.0, in which the signature of a signed entry or attachment moves from SHOULD to MUST, referring to these profiles for the suite and the signed bytes.
 - A witness-signed checkpoint delivered beside the export, as its own dimension: the prefix it fixes verified, and its freshness reported as not established, since the issuer chose which checkpoint to carry. It is not independent in this version.
 
