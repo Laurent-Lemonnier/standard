@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Checks for the signatures extension, version 0.1.0 (a proposal).
+"""Checks for the signatures extension, version 0.2.0 (a proposal).
 
 Runs the cases in cases.json over the values in vectors.json, which generate_vectors.py writes:
 
@@ -62,7 +62,7 @@ OTHER_SCHEMAS = {
     "core_record": ROOT / "standard" / "v5.0" / "schemas" / "decision-record.schema.json",
 }
 ANCHORING_VECTORS = ROOT / "extensions" / "anchoring" / "tests" / "vectors.json"
-PROFILE, VERSION = "dps-signatures", "0.1.0"
+PROFILE, VERSION = "dps-signatures", "0.2.0"
 MAGIC = b"DPS-SIG\x00"
 P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 PERSON_TYPES = ("person_approval", "person_review", "person_affirmation")
