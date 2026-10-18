@@ -360,9 +360,20 @@ def covering_timestamps(value, ts_results):
 
 # ---------------------------------------------------------------- the signature itself
 
+def strict_hex(text):
+    """The bytes of a key written as lowercase hex pairs and nothing else, or None for any other writing: a final
+    newline, which the schema's $ lets through and bytes.fromhex would skip, an uppercase digit, a space."""
+    if not isinstance(text, str) or not text or len(text) % 2 or any(c not in "0123456789abcdef" for c in text):
+        return None
+    return bytes.fromhex(text)
+
+
 def ed25519_verify(key, sig, made_over):
+    raw = strict_hex(key["public_key_hex"])
+    if raw is None:
+        return [f"the policy's public key for {key['key_ref']} is not written as lowercase hex pairs and nothing else"]
     try:
-        public = Ed25519PublicKey.from_public_bytes(bytes.fromhex(key["public_key_hex"]))
+        public = Ed25519PublicKey.from_public_bytes(raw)
         public.verify(b64decode(sig["value_b64"]), made_over)
         return []
     except InvalidSignature:
@@ -411,11 +422,17 @@ def webauthn_verify(key, sig, made_over):
             flags["cross_origin"] = client["crossOrigin"]
         if isinstance(client.get("topOrigin"), str) and client["topOrigin"]:
             flags["top_origin"] = client["topOrigin"]
-    try:
-        raw = bytes.fromhex(key["public_key_hex"])
-    except ValueError:
-        raw = b""
-    if len(raw) != 65 or raw[:1] != b"\x04":
+    if client.get("crossOrigin") is True or "topOrigin" in client:
+        # WebAuthn Level 3, 13.4.9: a relying party validates that a topOrigin is expected. The verifier plays that
+        # part through its policy, whose entry cannot yet name expected outside pages, so a framed signature fails.
+        findings.append(f"the client data states an outside page (crossOrigin {client.get('crossOrigin')!r}, topOrigin "
+                        f"{client.get('topOrigin')!r}); the policy's entry for {key['key_ref']} names no expected "
+                        "outside page, so a signature made from one fails")
+    raw = strict_hex(key["public_key_hex"])
+    if raw is None:
+        findings.append(f"the policy's public key for {key['key_ref']} is not written as lowercase hex pairs and "
+                        "nothing else")
+    elif len(raw) != 65 or raw[:1] != b"\x04":
         # The text says which form a passkey's entry gives. A point written compressed is another writing of the same
         # key, and the policy check decodes it as such; the entry this profile reads gives the uncompressed point.
         findings.append(f"the policy's public key for {key['key_ref']} is not the 65-byte uncompressed point "
@@ -1374,6 +1391,21 @@ def vector_case(c, v):
             bad.append("replacing the value's characters does not give the sealed digest")
         if by_writing == sealed:
             bad.append("replacing the written characters gives the sealed digest")
+    elif kind == "duplicate_member":
+        # issuer_signature naming value_b64 twice: not read. A reader keeping the last member would find the
+        # attachment as issued; one keeping the first would not.
+        e, att = v["duplicate_member"], v["action_binding_attachments"][c["decision_id"]]
+        raw = e["attachment_text"].encode("utf-8")
+        try:
+            strict_json(raw)
+            bad.append("read a document that names a member twice")
+        except ValueError:
+            pass
+        if json.loads(raw) != att:  # json.loads keeps the last member
+            bad.append("the last-member reading")
+        first = json.loads(raw, object_pairs_hook=lambda items: dict(reversed(items)))  # keeps the first member
+        if first["issuer_signature"]["value_b64"] == att["issuer_signature"]["value_b64"]:
+            bad.append("the first-member reading")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")
