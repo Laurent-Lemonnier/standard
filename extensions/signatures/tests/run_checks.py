@@ -567,9 +567,11 @@ def check_person_subject(ps, ctx):
             return ({"status": "not_checked", "findings": [f"the export holds no sealed entry for {ps['decision_id']}"]},
                     None, None)
         status, findings = digest_against_entry(ps["affirmed_digest"], entry, "the affirmed digest")
-        _, not_read = covered_record(entry)
-        if not_read:  # the digest stands; the actor the issuer names is not read from these bytes
+        record, not_read = covered_record(entry)
+        if not_read:  # the digest stands; whatever actor these bytes name is not read from them
             findings = findings + [not_read]
+        elif record is None:  # no bytes to read an actor from: unavailable, not readable, or not the seal's
+            not_read = f"no covered bytes of {ps['decision_id']} that match the seal are read"
         out = {"status": status, "checked_against": "export_entry",
                "covers_affirmation_record": entry["seal"]["affirmation_record_covered"]}
         if findings:
@@ -633,9 +635,10 @@ def check_identity(key, policy_result, signature, key_state, issuer_named, actor
                              "a person's key names the source its binding rests on"]}
     out = {"basis": "trust_policy", "source_ref": key["identity_source_ref"], "holder": key["holder"]}
     if issuer_named is None:
-        # Two cases, told apart in the finding: no actor to read, or bytes that would name one but are not read.
+        # Two cases, told apart in the finding: bytes that are read and name no actor, or bytes that are not read,
+        # which may name one or not; the check says only what it knows.
         out.update(status="not_checked", findings=[
-            "the actor the issuer names is not read, so none is compared with the key's holder: " + actor_not_read
+            "no actor is read from the covered bytes or compared with the key's holder: " + actor_not_read
             if actor_not_read else "the issuer names no actor to compare with the key's holder"])
         return out
     out["issuer_named"] = issuer_named
@@ -1037,14 +1040,19 @@ def run_context(ctx):
 # ---------------------------------------------------------------- a report read with its documents
 
 def not_integers(doc, path=""):
-    """The paths of the numbers in a document that are not written as JSON integers, such as 0.0."""
-    if isinstance(doc, float):
-        return [path]
-    if isinstance(doc, dict):
-        return [p for k, x in doc.items() for p in not_integers(x, f"{path}/{k}")]
-    if isinstance(doc, list):
-        return [p for i, x in enumerate(doc) for p in not_integers(x, f"{path}/{i}")]
-    return []
+    """The paths of the numbers in a document that are not written as JSON integers, such as 0.0. Walked with a
+    stack, not by recursion: the report schema leaves some values open (a timestamp subject's `of`), and a
+    schema-valid report nested deeper than the interpreter's call stack is still read."""
+    found, stack = [], [(doc, path)]
+    while stack:
+        x, at = stack.pop()
+        if isinstance(x, float):
+            found.append(at)
+        elif isinstance(x, dict):
+            stack.extend((v, f"{at}/{k}") for k, v in reversed(list(x.items())))
+        elif isinstance(x, list):
+            stack.extend((v, f"{at}/{i}") for i, v in reversed(list(enumerate(x))))
+    return found
 
 def digest_or_none(doc):
     try:
@@ -1355,7 +1363,8 @@ def vector_case(c, v):
                     bad.append(f"{n}: challenge")
                 if client["type"] != w["type"] or client["origin"] != w["origin"]:
                     bad.append(f"{n}: client data")
-                if (client.get("crossOrigin", False) != w.get("cross_origin", False)
+                if (("crossOrigin" in client) != ("cross_origin" in w)  # absent is a fact of its own, not false
+                        or client.get("crossOrigin") != w.get("cross_origin")
                         or client.get("topOrigin") != w.get("top_origin")):
                     bad.append(f"{n}: cross-origin statements")
             if auth[:32] != sha256(w["rp_id"].encode()) or auth[32] != int(w["flags_hex"], 16):
@@ -1522,9 +1531,10 @@ def person_case(c, v, validators):
             summary[k] = r["subject"].get(k)
     if "consistency" in c["expected"]:
         summary["consistency"] = r["identity"].get("consistency")
-    if "identity_reason" in c["expected"]:  # why no actor was compared: not_read says the bytes name one, unread
-        summary["identity_reason"] = ("not_read" if any(f.startswith("the actor the issuer names is not read")
-                                                        for f in r["identity"].get("findings", [])) else None)
+    if "identity_reason" in c["expected"]:  # why no actor was compared: covered bytes not read, or none to read
+        f = " ".join(r["identity"].get("findings", []))
+        summary["identity_reason"] = (None if not f.startswith("no actor is read from the covered bytes") else
+                                      "not_read" if "but are not read:" in f else "none_read")
     detail = [f"{d}: {f}" for d in PERSON_DIMENSIONS[1:] for f in r[d].get("findings", [])] + r.get("findings", [])
     return summary, "; ".join(detail)
 
@@ -1598,6 +1608,11 @@ def pairing_case(c, v, validators):
     for d, att in ctx["action_binding"].items():
         digests[f"action_binding:{d}"] = sha256(compact(att)).hex()
     report = apply_patch(v["base_report"], c["report_patch"], v, digests)
+    if "deep_subject_of" in c:  # a value nested far deeper than the call stack, where the schema leaves `of` open
+        deep = {}
+        for _ in range(c["deep_subject_of"]):
+            deep = {"of": deep}
+        report["timestamps"][0]["subject"]["of"]["note"] = deep
     if errors(validators["report"], report):
         return "error", "the report must be schema-valid for this case: " + errors(validators["report"], report)[0]
     problems = reference(read_with_documents, report, ctx)
