@@ -1624,6 +1624,38 @@
         "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b5050000000763a75e11fdf64d1ac3690219519191cd752c43cb18004701cd1e711e42abf1b8"
       }
     },
+    "approval_passkey_no_cross_origin": {
+      "about": "client data with no crossOrigin member, as older browsers write it: a same-origin ceremony, so the signature verifies",
+      "signed_with": "person-a-passkey-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_approval",
+        "decision_id": "DR-2099-101",
+        "stage_id": "o1",
+        "outcome": "approved",
+        "shown_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "approved_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "signed_at": "2026-10-01T09:12:30Z",
+        "signature": {
+          "algorithm": "WebAuthn-ES256",
+          "key_ref": "person-a-passkey-1",
+          "value_b64": "MEUCIQCfanFumGq/AagEvh4GG4zdQNF7tie9L5A1quemkRXofgIgMIL1epd8osmDZuYEZFbBrWj9XoUYigA8WogPpYRCjFs=",
+          "authenticator_data_b64": "v6vDdDKViwYzYNOtZGHJxHNa5/jt1GWSpeDwFFKy5LUFAAAABw==",
+          "client_data_json_b64": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicXJ6cUVfUUFhSzlKZWJJSldNWVpaNUxFcTQyZjZGd3BSLUk0SmFGVnRhbyIsIm9yaWdpbiI6Imh0dHBzOi8vZXhhbXBsZS5vcmcifQ=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e300000000f706572736f6e5f617070726f76616c00000012706572736f6e2d612d706173736b65792d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e900000014323032362d31302d30315430393a31323a33305a",
+      "webauthn": {
+        "challenge_b64url": "qrzqE_QAaK9JebIJWMYZZ5LEq42f6FwpR-I4JaFVtao",
+        "rp_id": "example.org",
+        "origin": "https://example.org",
+        "type": "webauthn.get",
+        "flags_hex": "05",
+        "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000007a1f511b3a14c8c7c33d272fe50db4f93828b1f3a3d193492e33cf690f414f893"
+      }
+    },
     "approval_passkey_dup_cross_origin": {
       "about": "client data naming crossOrigin twice, true first and false last: not read, so the signature fails; a last-member reader would see a same-origin ceremony",
       "signed_with": "person-a-passkey-1",

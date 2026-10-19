@@ -107,7 +107,7 @@
       }
     },
     "organisation_seal": {
-      "description": "The organisation's seal: the issuer's key over exactly what it issued. sealed names what is sealed (an export, an action-binding attachment or a record), its identifier and its digest: the export's or the attachment's bytes as issued (with an embedded copy of the seal replaced by A), or the record's seal_hash. The signature is Ed25519 in 0.1.0; another algorithm is reported as not supported.",
+      "description": "The organisation's seal: the issuer's key over exactly what it issued. sealed names what is sealed (an export, an action-binding attachment or a record), its identifier and its digest: the export's or the attachment's bytes as issued (with an embedded copy of the seal replaced by A), or the record's seal_hash. The signature is Ed25519 in 0.2.0; another algorithm is reported as not supported.",
       "type": "object",
       "additionalProperties": false,
       "required": ["profile", "profile_version", "assertion", "sealed", "sealed_at", "signature"],
