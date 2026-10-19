@@ -128,7 +128,10 @@ def strict_json(raw):
     def constant(name):
         raise ValueError(f"not JSON: {name}")
 
-    return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=constant)
+    try:
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=constant)
+    except RecursionError:  # nested deeper than this reader goes: not readable, like any other unreadable value
+        raise ValueError("nested too deep to read") from None
 
 
 def b64decode(text):
@@ -555,12 +558,14 @@ def digest_against_entry(value_hex, entry, what):
 
 
 def check_person_subject(ps, ctx):
-    """The signed fields against the document they name. Returns the dimension and the actor the issuer names."""
+    """The signed fields against the document they name. Returns the dimension, the actor the issuer names, and the
+    reason the actor is not read where covered bytes match the seal but are not read (None otherwise)."""
     kind = ps["assertion"]
     if kind == "person_affirmation":
         entry = record_entry(ctx.get("export"), ps["decision_id"])
         if entry is None:
-            return {"status": "not_checked", "findings": [f"the export holds no sealed entry for {ps['decision_id']}"]}, None
+            return ({"status": "not_checked", "findings": [f"the export holds no sealed entry for {ps['decision_id']}"]},
+                    None, None)
         status, findings = digest_against_entry(ps["affirmed_digest"], entry, "the affirmed digest")
         _, not_read = covered_record(entry)
         if not_read:  # the digest stands; the actor the issuer names is not read from these bytes
@@ -569,11 +574,11 @@ def check_person_subject(ps, ctx):
                "covers_affirmation_record": entry["seal"]["affirmation_record_covered"]}
         if findings:
             out["findings"] = findings
-        return out, entry_actor(entry)
+        return out, entry_actor(entry), not_read
     att = (ctx.get("action_binding") or {}).get(ps["decision_id"])
     if att is None:
-        return {"status": "not_checked", "findings": [f"the verifier holds no action-binding attachment for "
-                                                     f"{ps['decision_id']}"]}, None
+        return ({"status": "not_checked", "findings": [f"the verifier holds no action-binding attachment for "
+                                                      f"{ps['decision_id']}"]}, None, None)
     out = {"checked_against": "action_binding_attachment"}
     by_id = {}
     for s in att["stages"]:
@@ -583,7 +588,7 @@ def check_person_subject(ps, ctx):
     if stage is None or stage["kind"] != "outcome":
         bad.append(f"{ps['stage_id']} is not an outcome stage of the attachment of {ps['decision_id']}")
         out.update(status="failed", findings=bad)
-        return out, None
+        return out, None, None
     if stage["outcome"] != ps["outcome"]:
         bad.append(f"the attachment records outcome {stage['outcome']} for {ps['stage_id']}; the signature says "
                    f"{ps['outcome']}")
@@ -603,10 +608,10 @@ def check_person_subject(ps, ctx):
     out.update(status="failed" if bad else "verified")
     if bad:
         out["findings"] = bad
-    return out, stage.get("actor_ref")
+    return out, stage.get("actor_ref"), None
 
 
-def check_identity(key, policy_result, signature, key_state, issuer_named):
+def check_identity(key, policy_result, signature, key_state, issuer_named, actor_not_read=None):
     """The identity dimension: the key's binding to a person, from the policy and the source it names, compared with
     the actor the issuer names. Apart from the signature check; never from the signature itself. Verified only when
     the signature and the key's state are: a key outside its validity, superseded, or compromised with no timestamp
@@ -628,7 +633,10 @@ def check_identity(key, policy_result, signature, key_state, issuer_named):
                              "a person's key names the source its binding rests on"]}
     out = {"basis": "trust_policy", "source_ref": key["identity_source_ref"], "holder": key["holder"]}
     if issuer_named is None:
-        out.update(status="not_checked", findings=["the issuer names no actor to compare with the key's holder"])
+        # Two cases, told apart in the finding: no actor to read, or bytes that would name one but are not read.
+        out.update(status="not_checked", findings=[
+            "the actor the issuer names is not read, so none is compared with the key's holder: " + actor_not_read
+            if actor_not_read else "the issuer names no actor to compare with the key's holder"])
         return out
     out["issuer_named"] = issuer_named
     if issuer_named != key["holder"]:
@@ -666,7 +674,7 @@ def check_person(ps, policy, policy_result, ctx, ts_results):
     out["signature"] = signature
     if flags is not None:
         out["authenticator"] = flags
-    out["subject"], issuer_named = check_person_subject(ps, ctx)
+    out["subject"], issuer_named, actor_not_read = check_person_subject(ps, ctx)
     if signature["status"] == "verified":
         value = b64decode(ps["signature"]["value_b64"])
         out["key_state"] = key_state(key, "signed_at", ps["signed_at"], covering_timestamps(value, ts_results))
@@ -674,7 +682,7 @@ def check_person(ps, policy, policy_result, ctx, ts_results):
         out["key_state"] = refused(policy_result, "the key state")
     else:
         out["key_state"] = {"status": "not_checked"}
-    out["identity"] = check_identity(key, policy_result, signature, out["key_state"], issuer_named)
+    out["identity"] = check_identity(key, policy_result, signature, out["key_state"], issuer_named, actor_not_read)
     out["status"] = combine(signature["status"], out["subject"]["status"], out["key_state"]["status"])
     return out
 
@@ -1425,6 +1433,17 @@ def vector_case(c, v):
         first = json.loads(raw, object_pairs_hook=lambda items: dict(reversed(items)))  # keeps the first member
         if pointer_get(first, e["differs_at"]) == pointer_get(att, e["differs_at"]):
             bad.append("the first-member reading")
+    elif kind == "deep_nesting":
+        # A value nested deeper than the reader goes is refused as not readable (a ValueError, like a member named
+        # twice), so a check that reads it reports the document and goes on; it does not stop on a RecursionError.
+        raw = b"[" * c["depth"] + b"]" * c["depth"]
+        try:
+            strict_json(raw)
+            bad.append("read a value nested too deep")
+        except ValueError:
+            pass
+        except RecursionError:
+            bad.append("the reader stopped instead of refusing the value")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")
@@ -1503,6 +1522,9 @@ def person_case(c, v, validators):
             summary[k] = r["subject"].get(k)
     if "consistency" in c["expected"]:
         summary["consistency"] = r["identity"].get("consistency")
+    if "identity_reason" in c["expected"]:  # why no actor was compared: not_read says the bytes name one, unread
+        summary["identity_reason"] = ("not_read" if any(f.startswith("the actor the issuer names is not read")
+                                                        for f in r["identity"].get("findings", [])) else None)
     detail = [f"{d}: {f}" for d in PERSON_DIMENSIONS[1:] for f in r[d].get("findings", [])] + r.get("findings", [])
     return summary, "; ".join(detail)
 

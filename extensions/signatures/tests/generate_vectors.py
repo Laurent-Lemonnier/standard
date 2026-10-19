@@ -484,7 +484,7 @@ def make_person(keys, key_name, body, presented=None, signed_as=None):
 
 def make_passkey(keys, key_name, body, *, rp_id=RP_ID, origin=ORIGIN, flags=0x05, type_="webauthn.get",
                  challenge_over=None, sign_count=7, presented=None, cross_origin=False, top_origin=None,
-                 duplicate_cross_origin=False):
+                 duplicate_cross_origin=False, omit_cross_origin=False):
     """A person's assertion signed with a WebAuthn passkey (ES256). The authenticator signs
     authenticatorData || SHA-256(clientDataJSON); the challenge in clientDataJSON is SHA-256 of the signed bytes,
     in base64url without padding, as a browser writes it."""
@@ -495,6 +495,8 @@ def make_passkey(keys, key_name, body, *, rp_id=RP_ID, origin=ORIGIN, flags=0x05
     client = {"type": type_, "challenge": b64url(challenge), "origin": origin, "crossOrigin": cross_origin}
     if top_origin:
         client["topOrigin"] = top_origin
+    if omit_cross_origin:  # older browsers write no crossOrigin member at all
+        del client["crossOrigin"]
     client_data = json.dumps(client, separators=(",", ":")).encode("utf-8")
     if duplicate_cross_origin:  # crossOrigin named twice, true first and false last: a writing no browser makes
         client_data = client_data.replace(b'"crossOrigin":false', b'"crossOrigin":true,"crossOrigin":false', 1)
@@ -506,7 +508,8 @@ def make_passkey(keys, key_name, body, *, rp_id=RP_ID, origin=ORIGIN, flags=0x05
     present(ps, presented)
     return {"signed_with": key_name, "assertion": ps, "signed_bytes_hex": made_over.hex(),
             "webauthn": {"challenge_b64url": b64url(challenge), "rp_id": rp_id, "origin": origin, "type": type_,
-                         "cross_origin": cross_origin, **({"top_origin": top_origin} if top_origin else {}),
+                         **({} if omit_cross_origin else {"cross_origin": cross_origin}),
+                         **({"top_origin": top_origin} if top_origin else {}),
                          "flags_hex": f"{flags:02x}", "authenticator_signed_hex":
                          (authenticator_data + sha256(client_data)).hex()}}
 
@@ -722,6 +725,9 @@ def build():
     passkey("approval_passkey_cross_origin_text", "crossOrigin written as the text \"true\", which no browser writes: "
             "not a same-origin ceremony, so it fails; carried as no fact, since it is not a boolean",
             "person-a-passkey-1", passkey_approval, cross_origin="true")
+    passkey("approval_passkey_no_cross_origin", "client data with no crossOrigin member, as older browsers write it: a "
+            "same-origin ceremony, so the signature verifies", "person-a-passkey-1", passkey_approval,
+            omit_cross_origin=True)
     passkey("approval_passkey_dup_cross_origin", "client data naming crossOrigin twice, true first and false last: not "
             "read, so the signature fails; a last-member reader would see a same-origin ceremony",
             "person-a-passkey-1", passkey_approval, duplicate_cross_origin=True)
