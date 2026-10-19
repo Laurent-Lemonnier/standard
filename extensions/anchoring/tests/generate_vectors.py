@@ -267,13 +267,14 @@ def export_entry(name, seal, sequence, previous_link):
 
 
 def build_exports(seal, links):
-    """Portable verification 0.1.0 exports. Each entry keeps the chain fields it was exported with."""
+    """Portable verification 0.2.0 exports (unsigned entries, as 0.1.0 wrote them). Each entry keeps the chain fields
+    it was exported with."""
     L = links
     as_chained = {"R0": (0, None), "R1": (1, L["L0"]), "R2": (2, L["L1"]), "R4": (3, L["L2"])}
 
     def export(names, chained=None):
         chained = chained or as_chained
-        return {"profile": "dps-portable-verification", "profile_version": "0.1.0",
+        return {"profile": "dps-portable-verification", "profile_version": "0.2.0",
                 "entries": [export_entry(n, seal, *chained[n]) for n in names]}
 
     rewritten = dict(as_chained, R1x=(1, L["L0"]), R2=(2, L["L1x"]))
@@ -760,7 +761,8 @@ def build():
                  "the scalar is the seed as a big-endian integer mod (n - 1), plus 1); the RSA key is the 2048-bit "
                  "test key RFC 9500, section 2.1, publishes as testRSA2048, given here by its public modulus and "
                  "exponent. Records R0 to R2 and links L0 to "
-                 "L2 are those of the portable verification cases. Exports are portable verification 0.1.0 exports. "
+                 "L2 are those of the portable verification cases. Exports are portable verification 0.2.0 exports, "
+                 "their entries unsigned. "
                  "Each checkpoint names the test key it was signed with (signed_with) and gives signed_bytes_hex, "
                  "the bytes a verifier builds from it under the shared rule, and, where the key signed something "
                  "else, signature_made_over_hex. cp_accented's chain_id is not ASCII: its length prefix counts 19 "

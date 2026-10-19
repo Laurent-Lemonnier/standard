@@ -1,0 +1,6 @@
+# Used only by the portable verification extension's runner and vector generator, with tools/requirements.txt.
+# The same pins as the signatures extension, whose reference check this runner loads for an entry's signature.
+cryptography==50.0.2
+asn1crypto==1.5.1
+cffi==2.1.1
+pycparser==3.0

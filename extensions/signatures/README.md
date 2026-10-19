@@ -5,7 +5,7 @@
 | Extension | Signatures |
 | Version | 0.2.0 |
 | Status | Proposal. Not part of the Standard. |
-| Written against | Core v1.3, reading edition rev. 11 (tag `v1.3-rev11`), with reference files 5.2.0 (tag `ref-5.2.0`), portable verification 0.1.0, action binding 0.2.0 and anchoring 0.2.0 |
+| Written against | Core v1.3, reading edition rev. 11 (tag `v1.3-rev11`), with reference files 5.2.0 (tag `ref-5.2.0`), portable verification 0.2.0, action binding 0.2.0 and anchoring 0.2.0 |
 | Licences | This text: CC BY 4.0 ([LICENSE](../../LICENSE)). The schemas (`schemas/`) and the tests (`tests/`): Apache-2.0 ([LICENSES/Apache-2.0.txt](../../LICENSES/Apache-2.0.txt)) |
 
 This extension says how a person signs what they decided, how an organisation signs exactly what it issued, and how a check of those signatures reports what it found. It defines two assertions: the person's signature, made by the reviewer or the affirmer over the outcome they gave or the record they affirmed, and the organisation's seal, made by the issuer over an export, an action-binding attachment or a record. Each is an object beside the records, the export or the attachment. Neither adds a field to a decision record, and neither stands for the other.
@@ -29,7 +29,7 @@ Version 0.2.0 changes 0.1.0 after review, and some documents 0.1.0 allowed are r
 | `seal_hash` | Core §5.1(3), §6.2 | The digest a person affirms in a Core record, and the digest an organisation seals for a record |
 | `affirmation_record` | Core §5.1(3), §5.2, §6.2 | Part of the bytes the person affirms, when the seal covers it; `actor_identity` is the actor the issuer names, compared with the key's holder. Its timestamp and actor stay the issuer's statements |
 | `decision_id` | Core §6.2.1 | Which record, or which attachment, an assertion names |
-| The export, its entries, their covered bytes and `seal_field_handling` | Portable verification 0.1.0, "The export" | Where a record's covered bytes and seal are read, and how the seal field stands in them |
+| The export, its entries, their covered bytes and `seal_field_handling` | Portable verification 0.2.0, "The export" | Where a record's covered bytes and seal are read, and how the seal field stands in them |
 | The outcome stage (`stage_id`, `outcome`, `actor_ref`, `approved_spec_digest`) and its review (`shown_spec_digest`, `shown_view_digest`) | Action binding 0.2.0, "The attachment" | What the person's signature over an outcome names, compared with the attachment |
 | `issuer_signature` | Action binding 0.2.0, "Separate assertions" | Where an attachment may carry a copy of the organisation's seal, replaced by `A` before the attachment is digested |
 | The signed-bytes rule, the key states, the trust policy and the timestamp assertion | Anchoring 0.2.0 | Reused by reference, as below |

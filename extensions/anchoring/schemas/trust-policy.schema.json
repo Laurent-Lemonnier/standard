@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.2.0/trust-policy.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.1.0. Binds only an implementation that says it uses this extension.",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.2.0. Binds only an implementation that says it uses this extension.",
   "title": "Anchoring trust policy",
   "description": "The verifier's own configuration: the time-stamping authorities it trusts, by pinned certificate; the keys it trusts, each with its holder, role, validity and, if revoked, the time and reason; and the checkpoint sources it uses, for which chains. Nothing here comes from an export or an attachment. Each reference names one entry, and one public key has one key reference, one holder and one role. JSON Schema cannot compare entries: a verifier refuses a policy that breaks this. A time or a pinned certificate it cannot read fails the check that relies on that entry.",
   "type": "object",
