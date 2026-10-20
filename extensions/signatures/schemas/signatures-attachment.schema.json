@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://decisionprovenancestandard.org/extensions/signatures/0.2.0/signatures-attachment.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Signatures extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, portable verification 0.2.0, action binding 0.2.0 and anchoring 0.2.0. Binds only an implementation that says it uses this extension.",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Signatures extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, portable verification 0.2.0, action binding 0.2.0 and 0.3.0, and anchoring 0.2.0. Binds only an implementation that says it uses this extension.",
   "title": "Signatures attachment",
   "description": "The person's signatures and the organisation's seals, each an object beside the records, the export or the attachment it concerns, and, optionally, independent timestamps over their signature values (anchoring 0.2.0's assertion, by reference). The attachment never adds a field to a record, an export or an action-binding attachment. It carries key references only: never a key or a certificate, since a verifier takes every source of trust from its own trust policy, which is anchoring 0.2.0's.",
   "type": "object",

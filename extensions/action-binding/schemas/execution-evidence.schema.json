@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://decisionprovenancestandard.org/extensions/action-binding/0.2.0/execution-evidence.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Action binding extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0. Binds only an implementation that says it uses this extension.",
+  "$id": "https://decisionprovenancestandard.org/extensions/action-binding/0.3.0/execution-evidence.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Action binding extension 0.3.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, with signatures 0.2.0 and anchoring 0.2.0 for a signed attachment. Binds only an implementation that says it uses this extension.",
   "title": "Action binding: execution-evidence attachment",
-  "description": "Evidence that an external action was carried out as approved, kept beside one decision record. There is one attachment per decision record. It refers to the record by decision_id and is never inserted into it. It is not sealed or chained: the attachment_digest in a verification report fixes which bytes were checked. Every stage is the issuer's statement; the attachment does not show that a statement is true.",
+  "description": "Evidence that an external action was carried out as approved, kept beside one decision record. There is one attachment per decision record. It refers to the record by decision_id and is never inserted into it. It is not sealed or chained: the attachment_digest in a verification report fixes which bytes were checked. Every stage is the issuer's statement; the attachment does not show that a statement is true. A document that names a member twice, at any depth, is not read.",
   "type": "object",
   "additionalProperties": false,
   "required": ["profile", "profile_version", "decision_id", "action_specifications", "stages"],
   "properties": {
     "profile": {"const": "dps-action-binding"},
-    "profile_version": {"const": "0.2.0"},
+    "profile_version": {"const": "0.3.0"},
     "decision_id": {"$ref": "#/$defs/decision_id", "description": "The decision record this attachment sits beside (Core §6.2.1)."},
     "action_specifications": {
       "type": "array",
@@ -27,7 +27,7 @@
     },
     "issuer_signature": {
       "$ref": "#/$defs/signature",
-      "description": "The issuer's signature over the attachment. It attests that the issuer recorded these claims, not that they are true or that the named person acted."
+      "description": "The issuer's signature over the attachment: the signatures 0.2.0 organisation seal of kind attachment, carried as its copy. It attests that the issuer recorded these claims, not that they are true or that the named person acted."
     }
   },
   "$defs": {
@@ -324,18 +324,24 @@
       }
     },
     "signature": {
+      "description": "The copy of the organisation's seal: the signatures 0.2.0 organisation_seal of kind attachment over this attachment's decision_id and its bytes as issued with every character of value_b64 replaced by A, and sealed_at, under the signed-bytes rule that profile names. The verifier builds the signed bytes from the attachment itself, so a copy moved onto another attachment, or made before a stage was added, fails. The key comes from the verifier's own trust policy, never from the attachment. Exactly these five members.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["algorithm", "key_ref", "signed_bytes_ref", "value_b64"],
+      "required": ["algorithm", "key_ref", "signed_bytes_ref", "sealed_at", "value_b64"],
       "properties": {
-        "algorithm": {"type": "string", "minLength": 1},
+        "algorithm": {"const": "Ed25519"},
         "key_ref": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "A reference to the issuer's key. The key itself comes from the verifier's own trust policy, never from the attachment."
+          "description": "A reference to the issuer's key, in role organisation in the verifier's trust policy."
         },
-        "signed_bytes_ref": {"type": "string", "minLength": 1, "description": "Where the exact signed bytes are defined."},
+        "signed_bytes_ref": {"const": "dps-signatures 0.2.0 organisation_seal", "description": "Where the exact signed bytes are defined: the signatures 0.2.0 organisation seal."},
+        "sealed_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "description": "The time the issuer states, as the signatures profile writes it: signed, and under the sealed digest. It is the stated time for the key's state, and never time assurance for the stages."
+        },
         "value_b64": {"$ref": "#/$defs/base64"}
       }
     }

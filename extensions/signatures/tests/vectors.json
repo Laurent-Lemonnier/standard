@@ -319,7 +319,7 @@
   "action_binding_attachments": {
     "DR-2099-101": {
       "profile": "dps-action-binding",
-      "profile_version": "0.2.0",
+      "profile_version": "0.3.0",
       "decision_id": "DR-2099-101",
       "action_specifications": [
         {
@@ -390,12 +390,13 @@
         "algorithm": "Ed25519",
         "key_ref": "org-seal-1",
         "signed_bytes_ref": "dps-signatures 0.2.0 organisation_seal",
-        "value_b64": "zVd8cs1nE3TbB3G/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg=="
+        "sealed_at": "2026-10-01T09:30:00Z",
+        "value_b64": "kAY261+LeGDKEs8GSkka0R3QznTKk477V4mQQo4Y9jsQiGdw/73v2KOddL8wYRAJcP1JtT3VWgZAGU/fi8iyCg=="
       }
     },
     "DR-2099-102": {
       "profile": "dps-action-binding",
-      "profile_version": "0.2.0",
+      "profile_version": "0.3.0",
       "decision_id": "DR-2099-102",
       "action_specifications": [
         {
@@ -462,22 +463,22 @@
   },
   "escaped_copy": {
     "about": "The attachment of DR-2099-101 written with the copy's value escaped (/ as \\/). The rule replaces the value's characters, 88 here, whatever the writing: this writing gives the sealed digest, as the writing with no escape does (digest_replacing_the_value_characters); replacing the 92 written characters instead gives another digest (digest_replacing_the_written_characters), which is not the rule.",
-    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.2.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.2.0 organisation_seal\",\"value_b64\":\"zVd8cs1nE3TbB3G\\/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg==\"}}",
-    "value_as_written": "zVd8cs1nE3TbB3G\\/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg==",
+    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.3.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.2.0 organisation_seal\",\"sealed_at\":\"2026-10-01T09:30:00Z\",\"value_b64\":\"kAY261+LeGDKEs8GSkka0R3QznTKk477V4mQQo4Y9jsQiGdw\\/73v2KOddL8wYRAJcP1JtT3VWgZAGU\\/fi8iyCg==\"}}",
+    "value_as_written": "kAY261+LeGDKEs8GSkka0R3QznTKk477V4mQQo4Y9jsQiGdw\\/73v2KOddL8wYRAJcP1JtT3VWgZAGU\\/fi8iyCg==",
     "value_characters": 88,
-    "written_characters": 89,
-    "sealed_digest": "ea6e16c7f83b1a85cba9ff4cd5c03b29256fe596d0621b6691ffb33e58c4adea",
-    "digest_replacing_the_value_characters": "ea6e16c7f83b1a85cba9ff4cd5c03b29256fe596d0621b6691ffb33e58c4adea",
-    "digest_replacing_the_written_characters": "4b8e48e04ebbaf36afca8d64f58a002b7874f98b7a723a1f134e6217492ee795"
+    "written_characters": 90,
+    "sealed_digest": "e075d592b60a72e3e5a5ea9cb5062fad14c73485a752d1eddc6c32b90041b759",
+    "digest_replacing_the_value_characters": "e075d592b60a72e3e5a5ea9cb5062fad14c73485a752d1eddc6c32b90041b759",
+    "digest_replacing_the_written_characters": "5bc026d1a25f9d3efec7c523cc6fbb9c05cd667bdd52646a8f379d52212e2c89"
   },
   "duplicate_member": {
     "about": "The attachment of DR-2099-101 with issuer_signature naming value_b64 twice, a placeholder first and the seal's value last. Not read under the profile: a reader keeping the last member would find the attachment as issued (a matching digest, an agreeing copy), one keeping the first neither.",
-    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.2.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.2.0 organisation_seal\",\"value_b64\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\",\"value_b64\":\"zVd8cs1nE3TbB3G/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg==\"}}",
+    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.3.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.2.0 organisation_seal\",\"sealed_at\":\"2026-10-01T09:30:00Z\",\"value_b64\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\",\"value_b64\":\"kAY261+LeGDKEs8GSkka0R3QznTKk477V4mQQo4Y9jsQiGdw/73v2KOddL8wYRAJcP1JtT3VWgZAGU/fi8iyCg==\"}}",
     "differs_at": "/issuer_signature/value_b64"
   },
   "duplicate_member_deep": {
     "about": "The attachment of DR-2099-101 with the approved outcome stage naming approved_spec_digest twice, 64 zeros first and the digest last. Not read under the profile: the seal would verify for every reader, if the issuer sealed this writing; a last-member reader would see the digest, a first-member reader zeros.",
-    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.2.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.2.0 organisation_seal\",\"value_b64\":\"zVd8cs1nE3TbB3G/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg==\"}}",
+    "attachment_text": "{\"profile\":\"dps-action-binding\",\"profile_version\":\"0.3.0\",\"decision_id\":\"DR-2099-101\",\"action_specifications\":[{\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"bytes_b64\":\"eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9\"},\"summary\":{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"]}}],\"stages\":[{\"stage_id\":\"p1\",\"kind\":\"proposal\",\"at\":\"2026-10-01T09:00:00Z\",\"origin\":\"ai\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"deployer_role_pointer\":\"urn:example:role:payables-drafting\",\"system_name\":\"example-model\",\"version\":\"1\"},{\"stage_id\":\"v1\",\"kind\":\"review\",\"at\":\"2026-10-01T09:10:00Z\",\"reviewer_ref\":\"owner-example-1\",\"shown_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"proposal_ref\":\"p1\",\"shown_view_ref\":\"urn:example:review-view:101-1\",\"shown_view_digest\":\"2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193\"},{\"stage_id\":\"o1\",\"kind\":\"outcome\",\"at\":\"2026-10-01T09:12:00Z\",\"review_ref\":\"v1\",\"outcome\":\"approved\",\"actor_ref\":\"owner-example-1\",\"method\":\"signature\",\"approved_spec_digest\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"approved_spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\",\"authority\":{\"authority_ref\":\"urn:example:charter:CH-EXAMPLE-1#payables-delegation\"},\"rationale\":{\"timing\":\"contemporaneous\",\"ai_assisted\":false,\"recorded_at\":\"2026-10-01T09:12:00Z\",\"text_ref\":\"urn:example:rationale:101-1\"},\"core_ref\":{\"field\":\"affirmation_record\"}}],\"issuer_signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.2.0 organisation_seal\",\"sealed_at\":\"2026-10-01T09:30:00Z\",\"value_b64\":\"kAY261+LeGDKEs8GSkka0R3QznTKk477V4mQQo4Y9jsQiGdw/73v2KOddL8wYRAJcP1JtT3VWgZAGU/fi8iyCg==\"}}",
     "differs_at": "/stages/2/approved_spec_digest"
   },
   "certificates": {
@@ -1692,7 +1693,7 @@
   },
   "organisation_seals": {
     "seal_attachment": {
-      "about": "org-seal-1 seals the attachment of DR-2099-101, which carries a copy of the seal as its issuer_signature",
+      "about": "org-seal-1 seals the attachment of DR-2099-101, which carries a copy of the seal as its issuer_signature (action binding 0.3.0: five members, sealed_at written in place)",
       "signed_with": "org-seal-1",
       "assertion": {
         "profile": "dps-signatures",
@@ -1701,16 +1702,16 @@
         "sealed": {
           "kind": "attachment",
           "id": "DR-2099-101",
-          "digest": "ea6e16c7f83b1a85cba9ff4cd5c03b29256fe596d0621b6691ffb33e58c4adea"
+          "digest": "e075d592b60a72e3e5a5ea9cb5062fad14c73485a752d1eddc6c32b90041b759"
         },
         "sealed_at": "2026-10-01T09:30:00Z",
         "signature": {
           "algorithm": "Ed25519",
           "key_ref": "org-seal-1",
-          "value_b64": "zVd8cs1nE3TbB3G/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg=="
+          "value_b64": "kAY261+LeGDKEs8GSkka0R3QznTKk477V4mQQo4Y9jsQiGdw/73v2KOddL8wYRAJcP1JtT3VWgZAGU/fi8iyCg=="
         }
       },
-      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020ea6e16c7f83b1a85cba9ff4cd5c03b29256fe596d0621b6691ffb33e58c4adea00000014323032362d31302d30315430393a33303a30305a"
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020e075d592b60a72e3e5a5ea9cb5062fad14c73485a752d1eddc6c32b90041b75900000014323032362d31302d30315430393a33303a30305a"
     },
     "seal_attachment_copy_relabelled": {
       "about": "org-seal-1 seals the attachment of DR-2099-101 carrying a copy of the seal labelled EdDSA: the digest is over those bytes, so it matches; the copy does not agree with the seal",
@@ -1722,21 +1723,22 @@
         "sealed": {
           "kind": "attachment",
           "id": "DR-2099-101",
-          "digest": "889cf344f0142f60cbbcdd1802a11840a231a8eaa57c6079fa40144bcfe8c27d"
+          "digest": "db3a5eeb1c8aab240f9ef7e72fd330161cd1a8e75a349d2f576983558097e436"
         },
         "sealed_at": "2026-10-01T09:32:00Z",
         "signature": {
           "algorithm": "Ed25519",
           "key_ref": "org-seal-1",
-          "value_b64": "76Be59zJKae3wjDLZnmd4DVUVvmqewZ3QaQiLLKoZy3TTWlMuUaAj0s0vWKN/ah/EXgEauQRwJd8W1M7d9/ZBQ=="
+          "value_b64": "o2neupwZJEE3IhOfr90hAN9SkendGOkwB4xDmxoTvvf092oRmq0lR3r/4TPoT8zgGmhXzIHCJYgBc1Z/AoXfBA=="
         }
       },
-      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020889cf344f0142f60cbbcdd1802a11840a231a8eaa57c6079fa40144bcfe8c27d00000014323032362d31302d30315430393a33323a30305a",
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020db3a5eeb1c8aab240f9ef7e72fd330161cd1a8e75a349d2f576983558097e43600000014323032362d31302d30315430393a33323a30305a",
       "issuer_signature": {
         "algorithm": "EdDSA",
         "key_ref": "org-seal-1",
         "signed_bytes_ref": "dps-signatures 0.2.0 organisation_seal",
-        "value_b64": "76Be59zJKae3wjDLZnmd4DVUVvmqewZ3QaQiLLKoZy3TTWlMuUaAj0s0vWKN/ah/EXgEauQRwJd8W1M7d9/ZBQ=="
+        "sealed_at": "2026-10-01T09:32:00Z",
+        "value_b64": "o2neupwZJEE3IhOfr90hAN9SkendGOkwB4xDmxoTvvf092oRmq0lR3r/4TPoT8zgGmhXzIHCJYgBc1Z/AoXfBA=="
       }
     },
     "seal_attachment_copy_other_ref": {
@@ -1749,21 +1751,79 @@
         "sealed": {
           "kind": "attachment",
           "id": "DR-2099-101",
-          "digest": "276e9b871af0031e4a6e877ea04f847edadfa8a216885de6de6d3ba60b71bf32"
+          "digest": "888376de5f10142c121b7bd538301dd4cf4900313befe8ded2f53981f8de82d0"
         },
         "sealed_at": "2026-10-01T09:32:00Z",
         "signature": {
           "algorithm": "Ed25519",
           "key_ref": "org-seal-1",
-          "value_b64": "DYmY+hVUF0OMZsCklVV8TfW+thjxgy5m5bSFknTFLgJt8L7dZS0n7bXggkZvRodi3B+8TdrPOl6FhEGvIk+FBA=="
+          "value_b64": "koJr7nX2NMLpltWZEnztK/kdDIiHp0HgqqRBF9Y+9O0NLGmQgp4rUmuQyPmvz1WeygsHULxrRg9xR+pFAX0dBA=="
         }
       },
-      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020276e9b871af0031e4a6e877ea04f847edadfa8a216885de6de6d3ba60b71bf3200000014323032362d31302d30315430393a33323a30305a",
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020888376de5f10142c121b7bd538301dd4cf4900313befe8ded2f53981f8de82d000000014323032362d31302d30315430393a33323a30305a",
       "issuer_signature": {
         "algorithm": "Ed25519",
         "key_ref": "org-seal-1",
         "signed_bytes_ref": "dps-anchoring 0.2.0 checkpoint",
-        "value_b64": "DYmY+hVUF0OMZsCklVV8TfW+thjxgy5m5bSFknTFLgJt8L7dZS0n7bXggkZvRodi3B+8TdrPOl6FhEGvIk+FBA=="
+        "sealed_at": "2026-10-01T09:32:00Z",
+        "value_b64": "koJr7nX2NMLpltWZEnztK/kdDIiHp0HgqqRBF9Y+9O0NLGmQgp4rUmuQyPmvz1WeygsHULxrRg9xR+pFAX0dBA=="
+      }
+    },
+    "seal_attachment_copy_other_time": {
+      "about": "org-seal-1 seals the attachment of DR-2099-101 carrying a copy whose sealed_at is 09:35, the seal stating 09:30: the digest matches; the copy does not agree with the seal",
+      "signed_with": "org-seal-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "organisation_seal",
+        "sealed": {
+          "kind": "attachment",
+          "id": "DR-2099-101",
+          "digest": "f8c5c75f4ac2e4177fe98578659720593b1e4ed7a48e9e521ccc9fdc01b5ce3d"
+        },
+        "sealed_at": "2026-10-01T09:30:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "org-seal-1",
+          "value_b64": "oJt9MGt1VmyfG6ZTR/3p4crRIYc5qTAA+aIb8jOb8D6jfPSx7Potpx4nmdJe0byPG8PD0uF9pMPkoTIM0ZvHAA=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020f8c5c75f4ac2e4177fe98578659720593b1e4ed7a48e9e521ccc9fdc01b5ce3d00000014323032362d31302d30315430393a33303a30305a",
+      "issuer_signature": {
+        "algorithm": "Ed25519",
+        "key_ref": "org-seal-1",
+        "signed_bytes_ref": "dps-signatures 0.2.0 organisation_seal",
+        "sealed_at": "2026-10-01T09:35:00Z",
+        "value_b64": "oJt9MGt1VmyfG6ZTR/3p4crRIYc5qTAA+aIb8jOb8D6jfPSx7Potpx4nmdJe0byPG8PD0uF9pMPkoTIM0ZvHAA=="
+      }
+    },
+    "seal_attachment_copy_extra_member": {
+      "about": "org-seal-1 seals the attachment of DR-2099-101 carrying a copy with a member a copy does not have (holder): the digest matches; the copy does not agree with the seal",
+      "signed_with": "org-seal-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "organisation_seal",
+        "sealed": {
+          "kind": "attachment",
+          "id": "DR-2099-101",
+          "digest": "3083db5944b8ab180da8096181990c8c0bbf19dd531898524375853a7e454e01"
+        },
+        "sealed_at": "2026-10-01T09:30:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "org-seal-1",
+          "value_b64": "QRp+2BCyzH46E+uzrlFtWepKGmoud9bixdDLsHbeW+ixUjMREHKluLeZtM8f5D168HiLTHCRDKcTOZ5WGq5PBw=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d313031000000203083db5944b8ab180da8096181990c8c0bbf19dd531898524375853a7e454e0100000014323032362d31302d30315430393a33303a30305a",
+      "issuer_signature": {
+        "algorithm": "Ed25519",
+        "key_ref": "org-seal-1",
+        "signed_bytes_ref": "dps-signatures 0.2.0 organisation_seal",
+        "sealed_at": "2026-10-01T09:30:00Z",
+        "value_b64": "QRp+2BCyzH46E+uzrlFtWepKGmoud9bixdDLsHbeW+ixUjMREHKluLeZtM8f5D168HiLTHCRDKcTOZ5WGq5PBw==",
+        "holder": "Example issuer (test only)"
       }
     },
     "seal_attachment_wrong_rule": {
@@ -1776,16 +1836,16 @@
         "sealed": {
           "kind": "attachment",
           "id": "DR-2099-101",
-          "digest": "f2eba0671c3098cbad33c77009c605acbfa867e6177107ad55fd85ae3ec36a5f"
+          "digest": "a7d2e8bd2c90046038dffa4f66c994d76d57df33f0ed539bed8e8ad720128749"
         },
         "sealed_at": "2026-10-01T09:31:00Z",
         "signature": {
           "algorithm": "Ed25519",
           "key_ref": "org-seal-1",
-          "value_b64": "u6ikTx1s9SsxkbE0gJ/pegFXNAOEojedyFk61nJ5H9CaatSVq1n5H7L3iysEsfV8/xVQQ9r0w5Uww9Gy6ivjAA=="
+          "value_b64": "yQ9A6ZdhtbPSFVUM53WIvDbGqmjteCr+Rb/RWOMIC1vyVWGxDdL7NEyCIslswlcIRfhMOBQumhzsO/GWrzptBA=="
         }
       },
-      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020f2eba0671c3098cbad33c77009c605acbfa867e6177107ad55fd85ae3ec36a5f00000014323032362d31302d30315430393a33313a30305a"
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020a7d2e8bd2c90046038dffa4f66c994d76d57df33f0ed539bed8e8ad72012874900000014323032362d31302d30315430393a33313a30305a"
     },
     "seal_attachment_102": {
       "about": "org-seal-1 seals the attachment of DR-2099-102, which carries no copy",
@@ -1797,16 +1857,16 @@
         "sealed": {
           "kind": "attachment",
           "id": "DR-2099-102",
-          "digest": "4974612332c88d677c7e79f06f5aa5d3c6789ecc5a761cbe2bab1c29fd77e283"
+          "digest": "1e1b62bdbdd10e403bb1c7d5e0d0927cec9a2b0cd3ac8b43e1199cde72d5817c"
         },
         "sealed_at": "2026-10-02T09:40:00Z",
         "signature": {
           "algorithm": "Ed25519",
           "key_ref": "org-seal-1",
-          "value_b64": "UMBrHVIC+GEwGJd+4Q6zcfxegAHVfwck1O88ItOau3zspRr1EESNnETHgumYJVTBV5TwDqM3NypWfOCM2P6qCg=="
+          "value_b64": "PyMvWRDVmzIAiMbtijLK4lQaEgotOhF2z/YI/mDu6HasMWURJn1ugG/EskDdZX12alyqn7gOGYhg6ISc4A4yAw=="
         }
       },
-      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d313032000000204974612332c88d677c7e79f06f5aa5d3c6789ecc5a761cbe2bab1c29fd77e28300000014323032362d31302d30325430393a34303a30305a"
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d313032000000201e1b62bdbdd10e403bb1c7d5e0d0927cec9a2b0cd3ac8b43e1199cde72d5817c00000014323032362d31302d30325430393a34303a30305a"
     },
     "seal_record_r0": {
       "about": "org-seal-1 seals the record DR-2099-001: its seal_hash",
@@ -2306,8 +2366,8 @@
     },
     "sig_seal_attachment": {
       "about": "TSA 1 over seal_attachment's signature value",
-      "imprint_of_hex": "cd577c72cd671374db0771bfd043001e40c99c88088e2fa7ddad022723142b6d175316ebd61d20838b56a82a323e4ca7473c01aa67887865c974c79f7ca0da0e",
-      "token_b64": "MIID6QYJKoZIhvcNAQcCoIID2jCCA9YCAQMxDzANBglghkgBZQMEAgEFADBjBgsqhkiG9w0BCRABBKBUBFIwUAIBAQYDiDcBMDEwDQYJYIZIAWUDBAIBBQAEIOgGufVTrUxwRAx19Afqc/HE/8d5JQrS5oz1zySBk83zAgIBNBgPMjAyNjEwMDEwOTM1MDBaoIIB/zCCAfswggGhoAMCAQICAgoRMAoGCCqGSM49BAMCMFoxNDAyBgNVBAoMK0V4YW1wbGUgdGltZS1zdGFtcGluZyBhdXRob3JpdHkgKHRlc3Qgb25seSkxIjAgBgNVBAMMGUV4YW1wbGUgVFNBIDEgKHRlc3Qgb25seSkwHhcNMjYwMTAxMDAwMDAwWhcNMjcxMjMxMjM1OTU5WjBaMTQwMgYDVQQKDCtFeGFtcGxlIHRpbWUtc3RhbXBpbmcgYXV0aG9yaXR5ICh0ZXN0IG9ubHkpMSIwIAYDVQQDDBlFeGFtcGxlIFRTQSAxICh0ZXN0IG9ubHkpMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEVYu6fdNHLF9PO/BAWvmwIjkB2envQznjMIJsF91RnLa8ZnuVsmpI9HCKshvjQW+MUXxkXZmLlfwMpn+73oKTiKNXMFUwDAYDVR0TAQH/BAIwADAOBgNVHQ8BAf8EBAMCBsAwFgYDVR0lAQH/BAwwCgYIKwYBBQUHAwgwHQYDVR0OBBYEFAumH+zvhxN52zeW8gezVu8sKl5RMAoGCCqGSM49BAMCA0gAMEUCIQDgazjCMYltVbE5f0WJTKAanFumom+Bj01det7lwuVYEgIgDXNhqDNvOmbgC2g6m59rIrwOJz/JuYIHilmHiFUMtlcxggFWMIIBUgIBATBgMFoxNDAyBgNVBAoMK0V4YW1wbGUgdGltZS1zdGFtcGluZyBhdXRob3JpdHkgKHRlc3Qgb25seSkxIjAgBgNVBAMMGUV4YW1wbGUgVFNBIDEgKHRlc3Qgb25seSkCAgoRMA0GCWCGSAFlAwQCAQUAoIGGMBoGCSqGSIb3DQEJAzENBgsqhkiG9w0BCRABBDAvBgkqhkiG9w0BCQQxIgQgMcqyY4/8hux/yJxGm/fUdnGZ+0o5hWsc+7BInsqUqNAwNwYLKoZIhvcNAQkQAi8xKDAmMCQwIgQgTqLzAa5S4tAYQHaK4iYgfrjgYBipcjmQ6tzMM+lavQYwCgYIKoZIzj0EAwIERzBFAiEAl8GjHChINq15eu3otLdO3v1+jdd/GEMgiBt46lzM+Z8CIEdCcfacRL3DQm+Ajv/mr9jam6A6+CA4MhBgeztHSNfw"
+      "imprint_of_hex": "900636eb5f8b7860ca12cf064a491ad11dd0ce74ca938efb578990428e18f63b10886770ffbdefd8a39d74bf3061100970fd49b53dd55a0640194fdf8bc8b20a",
+      "token_b64": "MIID6QYJKoZIhvcNAQcCoIID2jCCA9YCAQMxDzANBglghkgBZQMEAgEFADBjBgsqhkiG9w0BCRABBKBUBFIwUAIBAQYDiDcBMDEwDQYJYIZIAWUDBAIBBQAEIObcumUsDKiQsF/0LPNQ9Nyxr6FnutRZ7V33/LmqE6qcAgIBNBgPMjAyNjEwMDEwOTM1MDBaoIIB/zCCAfswggGhoAMCAQICAgoRMAoGCCqGSM49BAMCMFoxNDAyBgNVBAoMK0V4YW1wbGUgdGltZS1zdGFtcGluZyBhdXRob3JpdHkgKHRlc3Qgb25seSkxIjAgBgNVBAMMGUV4YW1wbGUgVFNBIDEgKHRlc3Qgb25seSkwHhcNMjYwMTAxMDAwMDAwWhcNMjcxMjMxMjM1OTU5WjBaMTQwMgYDVQQKDCtFeGFtcGxlIHRpbWUtc3RhbXBpbmcgYXV0aG9yaXR5ICh0ZXN0IG9ubHkpMSIwIAYDVQQDDBlFeGFtcGxlIFRTQSAxICh0ZXN0IG9ubHkpMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEVYu6fdNHLF9PO/BAWvmwIjkB2envQznjMIJsF91RnLa8ZnuVsmpI9HCKshvjQW+MUXxkXZmLlfwMpn+73oKTiKNXMFUwDAYDVR0TAQH/BAIwADAOBgNVHQ8BAf8EBAMCBsAwFgYDVR0lAQH/BAwwCgYIKwYBBQUHAwgwHQYDVR0OBBYEFAumH+zvhxN52zeW8gezVu8sKl5RMAoGCCqGSM49BAMCA0gAMEUCIQDgazjCMYltVbE5f0WJTKAanFumom+Bj01det7lwuVYEgIgDXNhqDNvOmbgC2g6m59rIrwOJz/JuYIHilmHiFUMtlcxggFWMIIBUgIBATBgMFoxNDAyBgNVBAoMK0V4YW1wbGUgdGltZS1zdGFtcGluZyBhdXRob3JpdHkgKHRlc3Qgb25seSkxIjAgBgNVBAMMGUV4YW1wbGUgVFNBIDEgKHRlc3Qgb25seSkCAgoRMA0GCWCGSAFlAwQCAQUAoIGGMBoGCSqGSIb3DQEJAzENBgsqhkiG9w0BCRABBDAvBgkqhkiG9w0BCQQxIgQg+f7NnSLc7UXGtxYwxTbEpHQBWlg44pxeaOCCCmn0quwwNwYLKoZIhvcNAQkQAi8xKDAmMCQwIgQgTqLzAa5S4tAYQHaK4iYgfrjgYBipcjmQ6tzMM+lavQYwCgYIKoZIzj0EAwIERzBFAiEAgtlp4hyUQJ+YROAsVZxj8OKBSZpYK/P0dplRIqZO+cwCIGKn09dy6QWU17Gm0z3CFI/R2PZHUI5zp72TJTTdpXLo"
     },
     "sig_approval_a2_no_cert_id": {
       "about": "TSA 1 over approval_a2's signature value, with no signingCertificateV2 attribute",
@@ -2650,13 +2710,13 @@
         "sealed": {
           "kind": "attachment",
           "id": "DR-2099-101",
-          "digest": "ea6e16c7f83b1a85cba9ff4cd5c03b29256fe596d0621b6691ffb33e58c4adea"
+          "digest": "e075d592b60a72e3e5a5ea9cb5062fad14c73485a752d1eddc6c32b90041b759"
         },
         "sealed_at": "2026-10-01T09:30:00Z",
         "signature": {
           "algorithm": "Ed25519",
           "key_ref": "org-seal-1",
-          "value_b64": "zVd8cs1nE3TbB3G/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg=="
+          "value_b64": "kAY261+LeGDKEs8GSkka0R3QznTKk477V4mQQo4Y9jsQiGdw/73v2KOddL8wYRAJcP1JtT3VWgZAGU/fi8iyCg=="
         }
       },
       {
@@ -2850,11 +2910,11 @@
           "sealed_kind": "attachment",
           "sealed_id": "DR-2099-101"
         },
-        "value_b64": "zVd8cs1nE3TbB3G/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg=="
+        "value_b64": "kAY261+LeGDKEs8GSkka0R3QznTKk477V4mQQo4Y9jsQiGdw/73v2KOddL8wYRAJcP1JtT3VWgZAGU/fi8iyCg=="
       },
       "hash_algorithm": "SHA-256",
       "tsa_ref": "tsa-example-1",
-      "token_b64": "MIID6QYJKoZIhvcNAQcCoIID2jCCA9YCAQMxDzANBglghkgBZQMEAgEFADBjBgsqhkiG9w0BCRABBKBUBFIwUAIBAQYDiDcBMDEwDQYJYIZIAWUDBAIBBQAEIOgGufVTrUxwRAx19Afqc/HE/8d5JQrS5oz1zySBk83zAgIBNBgPMjAyNjEwMDEwOTM1MDBaoIIB/zCCAfswggGhoAMCAQICAgoRMAoGCCqGSM49BAMCMFoxNDAyBgNVBAoMK0V4YW1wbGUgdGltZS1zdGFtcGluZyBhdXRob3JpdHkgKHRlc3Qgb25seSkxIjAgBgNVBAMMGUV4YW1wbGUgVFNBIDEgKHRlc3Qgb25seSkwHhcNMjYwMTAxMDAwMDAwWhcNMjcxMjMxMjM1OTU5WjBaMTQwMgYDVQQKDCtFeGFtcGxlIHRpbWUtc3RhbXBpbmcgYXV0aG9yaXR5ICh0ZXN0IG9ubHkpMSIwIAYDVQQDDBlFeGFtcGxlIFRTQSAxICh0ZXN0IG9ubHkpMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEVYu6fdNHLF9PO/BAWvmwIjkB2envQznjMIJsF91RnLa8ZnuVsmpI9HCKshvjQW+MUXxkXZmLlfwMpn+73oKTiKNXMFUwDAYDVR0TAQH/BAIwADAOBgNVHQ8BAf8EBAMCBsAwFgYDVR0lAQH/BAwwCgYIKwYBBQUHAwgwHQYDVR0OBBYEFAumH+zvhxN52zeW8gezVu8sKl5RMAoGCCqGSM49BAMCA0gAMEUCIQDgazjCMYltVbE5f0WJTKAanFumom+Bj01det7lwuVYEgIgDXNhqDNvOmbgC2g6m59rIrwOJz/JuYIHilmHiFUMtlcxggFWMIIBUgIBATBgMFoxNDAyBgNVBAoMK0V4YW1wbGUgdGltZS1zdGFtcGluZyBhdXRob3JpdHkgKHRlc3Qgb25seSkxIjAgBgNVBAMMGUV4YW1wbGUgVFNBIDEgKHRlc3Qgb25seSkCAgoRMA0GCWCGSAFlAwQCAQUAoIGGMBoGCSqGSIb3DQEJAzENBgsqhkiG9w0BCRABBDAvBgkqhkiG9w0BCQQxIgQgMcqyY4/8hux/yJxGm/fUdnGZ+0o5hWsc+7BInsqUqNAwNwYLKoZIhvcNAQkQAi8xKDAmMCQwIgQgTqLzAa5S4tAYQHaK4iYgfrjgYBipcjmQ6tzMM+lavQYwCgYIKoZIzj0EAwIERzBFAiEAl8GjHChINq15eu3otLdO3v1+jdd/GEMgiBt46lzM+Z8CIEdCcfacRL3DQm+Ajv/mr9jam6A6+CA4MhBgeztHSNfw"
+      "token_b64": "MIID6QYJKoZIhvcNAQcCoIID2jCCA9YCAQMxDzANBglghkgBZQMEAgEFADBjBgsqhkiG9w0BCRABBKBUBFIwUAIBAQYDiDcBMDEwDQYJYIZIAWUDBAIBBQAEIObcumUsDKiQsF/0LPNQ9Nyxr6FnutRZ7V33/LmqE6qcAgIBNBgPMjAyNjEwMDEwOTM1MDBaoIIB/zCCAfswggGhoAMCAQICAgoRMAoGCCqGSM49BAMCMFoxNDAyBgNVBAoMK0V4YW1wbGUgdGltZS1zdGFtcGluZyBhdXRob3JpdHkgKHRlc3Qgb25seSkxIjAgBgNVBAMMGUV4YW1wbGUgVFNBIDEgKHRlc3Qgb25seSkwHhcNMjYwMTAxMDAwMDAwWhcNMjcxMjMxMjM1OTU5WjBaMTQwMgYDVQQKDCtFeGFtcGxlIHRpbWUtc3RhbXBpbmcgYXV0aG9yaXR5ICh0ZXN0IG9ubHkpMSIwIAYDVQQDDBlFeGFtcGxlIFRTQSAxICh0ZXN0IG9ubHkpMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEVYu6fdNHLF9PO/BAWvmwIjkB2envQznjMIJsF91RnLa8ZnuVsmpI9HCKshvjQW+MUXxkXZmLlfwMpn+73oKTiKNXMFUwDAYDVR0TAQH/BAIwADAOBgNVHQ8BAf8EBAMCBsAwFgYDVR0lAQH/BAwwCgYIKwYBBQUHAwgwHQYDVR0OBBYEFAumH+zvhxN52zeW8gezVu8sKl5RMAoGCCqGSM49BAMCA0gAMEUCIQDgazjCMYltVbE5f0WJTKAanFumom+Bj01det7lwuVYEgIgDXNhqDNvOmbgC2g6m59rIrwOJz/JuYIHilmHiFUMtlcxggFWMIIBUgIBATBgMFoxNDAyBgNVBAoMK0V4YW1wbGUgdGltZS1zdGFtcGluZyBhdXRob3JpdHkgKHRlc3Qgb25seSkxIjAgBgNVBAMMGUV4YW1wbGUgVFNBIDEgKHRlc3Qgb25seSkCAgoRMA0GCWCGSAFlAwQCAQUAoIGGMBoGCSqGSIb3DQEJAzENBgsqhkiG9w0BCRABBDAvBgkqhkiG9w0BCQQxIgQg+f7NnSLc7UXGtxYwxTbEpHQBWlg44pxeaOCCCmn0quwwNwYLKoZIhvcNAQkQAi8xKDAmMCQwIgQgTqLzAa5S4tAYQHaK4iYgfrjgYBipcjmQ6tzMM+lavQYwCgYIKoZIzj0EAwIERzBFAiEAgtlp4hyUQJ+YROAsVZxj8OKBSZpYK/P0dplRIqZO+cwCIGKn09dy6QWU17Gm0z3CFI/R2PZHUI5zp72TJTTdpXLo"
     },
     "sig_approval_a2_named_profile": {
       "assertion": "timestamp",
@@ -2904,7 +2964,7 @@
     "trust_policy": {
       "status": "verified"
     },
-    "attachment_digest": "1ea98584ce624faa35ee6dcb0bbc722bc14a547a9a95c1aacf777a95b6df3073",
+    "attachment_digest": "5a31dd9621ec04aa779df8d0465ad0644b7d3ba6aa23791cc24ca012c12845f9",
     "documents": [
       {
         "kind": "export",
@@ -2913,12 +2973,12 @@
       {
         "kind": "action_binding_attachment",
         "decision_id": "DR-2099-101",
-        "digest": "f2eba0671c3098cbad33c77009c605acbfa867e6177107ad55fd85ae3ec36a5f"
+        "digest": "a7d2e8bd2c90046038dffa4f66c994d76d57df33f0ed539bed8e8ad720128749"
       },
       {
         "kind": "action_binding_attachment",
         "decision_id": "DR-2099-102",
-        "digest": "4974612332c88d677c7e79f06f5aa5d3c6789ecc5a761cbe2bab1c29fd77e283"
+        "digest": "1e1b62bdbdd10e403bb1c7d5e0d0927cec9a2b0cd3ac8b43e1199cde72d5817c"
       }
     ],
     "person_signature_count": 5,
