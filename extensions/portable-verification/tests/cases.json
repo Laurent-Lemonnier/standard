@@ -70,7 +70,18 @@
     {"id": "P41", "description": "a verified key state naming no key reference", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/key_state/key_ref"}], "expected": "fail"},
     {"id": "P42", "description": "a verified key state that does not say what its time rests on", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/key_state/time_basis"}], "expected": "fail"},
     {"id": "P43", "description": "a verified key state with no time", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/key_state/time"}], "expected": "fail"},
-    {"id": "P44", "description": "a verified signature that does not say where the key came from", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/reference_source"}], "expected": "fail"}
+    {"id": "P44", "description": "a verified signature that does not say where the key came from", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/reference_source"}], "expected": "fail"},
+    {"id": "P45", "description": "a verified export seal whose signature names no key reference", "schema": "report", "patch": [{"remove": "/export_seal/signature/key_ref"}], "expected": "fail"},
+    {"id": "P46", "description": "a verified export seal whose signature names no algorithm", "schema": "report", "patch": [{"remove": "/export_seal/signature/algorithm"}], "expected": "fail"},
+    {"id": "P47", "description": "a verified export seal whose signature does not say where the key came from", "schema": "report", "patch": [{"remove": "/export_seal/signature/reference_source"}], "expected": "fail"},
+    {"id": "P48", "description": "a verified export seal whose key came from the export, not the trust policy", "schema": "report", "patch": [{"set": "/export_seal/signature/reference_source", "value": "same_export"}], "expected": "fail"},
+    {"id": "P49", "description": "a verified export seal whose pinned certificate failed", "schema": "report", "patch": [{"set": "/export_seal/signature/certificate", "value": "failed"}], "expected": "fail"},
+    {"id": "P50", "description": "an export seal called verified while its signature is not", "schema": "report", "patch": [{"set": "/export_seal/signature", "value": {"status": "failed", "key_ref": "org-seal-1", "algorithm": "Ed25519", "findings": ["the signature does not verify over the signed bytes"]}}], "expected": "fail"},
+    {"id": "P51", "description": "an export seal called verified while its key state is not", "schema": "report", "patch": [{"set": "/export_seal/key_state", "value": {"status": "failed", "key_ref": "org-seal-1", "findings": ["made after org-seal-1's not_after, by its stated time"]}}], "expected": "fail"},
+    {"id": "P52", "description": "a verified entry signature whose pinned certificate failed", "schema": "report", "patch": [{"set": "/entries/1/cryptographic_verification/signature/certificate", "value": "failed"}], "expected": "fail"},
+    {"id": "P53", "description": "verified time that names no authority", "schema": "report", "patch": [{"remove": "/entries/0/time_assurance/source_ref"}], "expected": "fail"},
+    {"id": "P54", "description": "verified time that names no timestamp", "schema": "report", "patch": [{"remove": "/entries/0/time_assurance/timestamp_index"}], "expected": "fail"},
+    {"id": "P55", "description": "identity called verified against an independent source it does not name", "schema": "report", "patch": [{"set": "/entries/0/identity_assurance", "value": {"status": "verified", "basis": "independent_source"}}], "expected": "fail"}
   ],
   "vector_cases": [
     {"id": "W01", "description": "SHA-256 known value for 'abc' (FIPS 180-2)", "check": "known_vector", "text": "abc", "digest": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "expected": "match"},
