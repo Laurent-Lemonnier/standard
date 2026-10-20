@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://decisionprovenancestandard.org/extensions/portable-verification/0.1.0/verification-report.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Portable verification extension 0.1.0 (proposal), written against Core v1.2 rev. 10 and reference files 5.1.2. Binds only an implementation that says it uses this extension.",
+  "$id": "https://decisionprovenancestandard.org/extensions/portable-verification/0.2.0/verification-report.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Portable verification extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, with signatures 0.2.0 and anchoring 0.2.0 for a signed entry. Binds only an implementation that says it uses this extension.",
   "title": "Portable verification report",
   "description": "What a verifier found in one export, dimension by dimension, with the scope of its conclusion. There is deliberately no overall result: no dimension stands for the others, and nothing here is a legal conclusion or a Conformance Level.",
   "type": "object",
@@ -12,6 +12,7 @@
     "export_digest",
     "export_entry_count",
     "trust_policy_ref",
+    "trust_policy",
     "structural_validity",
     "entries",
     "object_links",
@@ -19,7 +20,7 @@
   ],
   "properties": {
     "profile": {"const": "dps-portable-verification-report"},
-    "profile_version": {"const": "0.1.0"},
+    "profile_version": {"const": "0.2.0"},
     "export_digest": {"$ref": "#/$defs/sha256_hex", "description": "SHA-256 of the export's bytes as received."},
     "export_entry_count": {
       "type": "integer",
@@ -29,15 +30,44 @@
     "trust_policy_ref": {
       "type": "string",
       "minLength": 1,
-      "description": "The trust policy the verifier configured independently of the export."
+      "description": "The trust policy the verifier configured independently of the export: anchoring 0.2.0's."
+    },
+    "trust_policy": {
+      "description": "Whether the policy itself was accepted: one public key, one key reference, one holder, one role; one reference, one entry (anchoring 0.2.0). A refused policy fails every dimension that relies on it. The same object as in an anchoring or signatures report.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["verified", "failed"]},
+        "findings": {"$ref": "#/$defs/findings"}
+      }
+    },
+    "signatures_attachment_digest": {
+      "$ref": "#/$defs/sha256_hex",
+      "description": "SHA-256 of the signatures 0.2.0 attachment read beside the export, as received, when one was: the export's seal and the independent timestamps over signature values come from it."
     },
     "structural_validity": {"$ref": "#/$defs/check", "description": "The export against the export schema."},
     "entries": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/entry_result"}},
     "object_links": {"$ref": "#/$defs/object_links"},
+    "export_seal": {
+      "$ref": "#/$defs/export_seal",
+      "description": "The organisation's seal of kind export over the export's bytes as issued, read from the signatures attachment beside the export, when there is one. It binds the set of entries and their content as issued; the entry signatures do not."
+    },
     "scope_of_conclusion": {"$ref": "#/$defs/scope_of_conclusion"}
+  },
+  "if": {"properties": {"trust_policy": {"properties": {"status": {"const": "failed"}}, "required": ["status"]}}, "required": ["trust_policy"]},
+  "then": {
+    "description": "A refused policy: no signature and no seal verifies.",
+    "properties": {
+      "entries": {"items": {"properties": {"cryptographic_verification": {"properties": {"signature": {"properties": {"status": {"enum": ["failed", "not_checked", "unavailable"]}}}}}}}},
+      "export_seal": {"properties": {"status": {"const": "failed"}}}
+    }
   },
   "$defs": {
     "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ref": {"type": "string", "minLength": 1, "maxLength": 256},
+    "instant": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "index": {"type": "integer", "minimum": 0},
     "status": {"enum": ["verified", "failed", "not_checked", "unavailable", "not_supported"]},
     "findings": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "check": {
@@ -57,15 +87,94 @@
         "status": {"$ref": "#/$defs/status"},
         "reference_source": {
           "enum": ["same_export", "trust_policy"],
-          "description": "Where the key, or the seal value compared with, came from."
+          "description": "Where the seal value compared with came from."
         },
         "findings": {"$ref": "#/$defs/findings"}
       },
       "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
       "then": {"required": ["reference_source"]}
     },
+    "key_state": {
+      "description": "The key's state when the signature was made, as anchoring 0.2.0 defines it, with sealed_at as the stated time. time_basis says what that time rests on: stated_time is the issuer's own statement, never independent time; independent_timestamp is a verified timestamp over the signature value, from the signatures attachment beside the export.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "revocation_reason": {"enum": ["superseded", "compromised"]},
+        "time_basis": {"enum": ["stated_time", "independent_timestamp"]},
+        "time": {"$ref": "#/$defs/instant"},
+        "timestamp_index": {"$ref": "#/$defs/index", "description": "The timestamp the time rests on, in the signatures attachment."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {"required": ["key_ref", "time_basis", "time"]}
+        },
+        {
+          "if": {"properties": {"time_basis": {"const": "independent_timestamp"}}, "required": ["time_basis"]},
+          "then": {"required": ["timestamp_index"]},
+          "else": {"not": {"required": ["timestamp_index"]}}
+        },
+        {
+          "description": "After a compromise, only an independent timestamp earlier than revoked_at establishes the time.",
+          "if": {
+            "properties": {"status": {"const": "verified"}, "revocation_reason": {"const": "compromised"}},
+            "required": ["status", "revocation_reason"]
+          },
+          "then": {"properties": {"time_basis": {"const": "independent_timestamp"}}}
+        }
+      ]
+    },
+    "signature_check": {
+      "description": "A signature over the signed bytes the verifier built, with the key the trust policy gives for key_ref, in role organisation.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "algorithm": {"type": "string", "minLength": 1},
+        "reference_source": {"enum": ["trust_policy", "same_export"], "description": "Where the key came from."},
+        "certificate": {"$ref": "#/$defs/status", "description": "The certificate the policy pins for the key holds it (verified), or none is pinned (not_checked)."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {
+        "required": ["key_ref", "algorithm", "reference_source"],
+        "properties": {"reference_source": {"const": "trust_policy"}, "certificate": {"enum": ["verified", "not_checked"]}}
+      }
+    },
+    "entry_signature": {
+      "description": "The entry's signature as one dimension: the holder of the organisation's key issued this digest under this identifier. Verified only when the signature over the bytes the verifier built from the entry verifies with the policy's key, in role organisation, and the key's state when it signed is verified. holder is the holder the policy gives for the key: the export names no issuer. An unsigned entry is not_checked, with the finding that it carries no signature; it is never verified.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "algorithm": {"type": "string", "minLength": 1},
+        "holder": {"type": "string", "minLength": 1},
+        "reference_source": {"enum": ["trust_policy", "same_export"], "description": "Where the key came from."},
+        "certificate": {"$ref": "#/$defs/status"},
+        "key_state": {"$ref": "#/$defs/key_state"},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {
+        "required": ["key_ref", "algorithm", "holder", "reference_source", "key_state"],
+        "properties": {
+          "algorithm": {"const": "Ed25519"},
+          "reference_source": {"const": "trust_policy"},
+          "certificate": {"enum": ["verified", "not_checked"]},
+          "key_state": {"properties": {"status": {"const": "verified"}}}
+        }
+      }
+    },
     "assurance": {
-      "description": "Time or identity. An issuer's own assertion is never reported as verified.",
+      "description": "Identity. An issuer's own assertion is never reported as verified.",
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "basis"],
@@ -77,6 +186,23 @@
       },
       "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
       "then": {"required": ["source_ref"], "properties": {"basis": {"const": "independent_source"}}}
+    },
+    "time_assurance": {
+      "description": "Time. Verified only against a verified independent timestamp over the entry's signature value, from the signatures attachment beside the export: it shows that the signature, and so the digest it names, existed no later than no_later_than. It never shows when the decision was made or affirmed; the issuer's own times (affirmation_record.timestamp, sealed_at) are its assertions.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "basis"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "basis": {"enum": ["issuer_assertion", "independent_source"]},
+        "source_ref": {"type": "string", "minLength": 1, "description": "The authority the policy pins (its tsa_ref)."},
+        "no_later_than": {"$ref": "#/$defs/instant", "description": "genTime plus the token's accuracy, if it states one: the time T by which the signature existed."},
+        "timestamp_index": {"$ref": "#/$defs/index", "description": "The timestamp in the signatures attachment."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {"required": ["source_ref", "no_later_than", "timestamp_index"], "properties": {"basis": {"const": "independent_source"}}},
+      "else": {"not": {"anyOf": [{"required": ["no_later_than"]}, {"required": ["timestamp_index"]}]}}
     },
     "entry_result": {
       "type": "object",
@@ -116,12 +242,8 @@
           "additionalProperties": false,
           "required": ["seal_digest", "signature"],
           "properties": {
-            "seal_digest": {"$ref": "#/$defs/crypto_check"},
-            "signature": {
-              "$ref": "#/$defs/crypto_check",
-              "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
-              "then": {"properties": {"reference_source": {"const": "trust_policy"}}}
-            }
+            "seal_digest": {"$ref": "#/$defs/crypto_check", "description": "The Core seal: the covered bytes against seal_hash (an original) or derived_digest (a derived representation)."},
+            "signature": {"$ref": "#/$defs/entry_signature"}
           }
         },
         "content_availability": {
@@ -136,7 +258,7 @@
           "if": {"properties": {"status": {"const": "unavailable"}}, "required": ["status"]},
           "then": {"required": ["reason"]}
         },
-        "time_assurance": {"$ref": "#/$defs/assurance"},
+        "time_assurance": {"$ref": "#/$defs/time_assurance"},
         "identity_assurance": {"$ref": "#/$defs/assurance"},
         "original_seal_check": {
           "description": "For a derived representation: the check of the original seal, reported on its own.",
@@ -160,7 +282,7 @@
           }
         },
         {
-          "description": "Content that is unavailable is reported as unavailable, never as verified or failed.",
+          "description": "Content that is unavailable is reported as unavailable, never as verified or failed; its signature covers a digest whose bytes the verifier does not hold.",
           "if": {
             "properties": {"content_availability": {"properties": {"status": {"const": "unavailable"}}, "required": ["status"]}},
             "required": ["content_availability"]
@@ -178,6 +300,41 @@
           }
         }
       ]
+    },
+    "export_seal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "key_ref", "sealed_id", "sealed_at", "signature", "subject", "key_state"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status", "description": "The seal as one dimension: the holder of the organisation's key issued these exact export bytes. Verified only when signature, subject and key_state are."},
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "holder": {"type": "string", "minLength": 1, "description": "The holder the policy gives for the key."},
+        "sealed_id": {"type": "string", "minLength": 1, "description": "The issuer's own reference for the export, which states no identifier."},
+        "sealed_at": {"$ref": "#/$defs/instant", "description": "The time the issuer states: the stated time for the key's state, never time assurance."},
+        "signature": {"$ref": "#/$defs/signature_check"},
+        "subject": {
+          "description": "The sealed digest against the export's bytes as received.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "checked_against"],
+          "properties": {
+            "status": {"$ref": "#/$defs/status"},
+            "checked_against": {"const": "export"},
+            "findings": {"$ref": "#/$defs/findings"}
+          }
+        },
+        "key_state": {"$ref": "#/$defs/key_state"},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {
+        "required": ["holder"],
+        "properties": {
+          "signature": {"properties": {"status": {"const": "verified"}}},
+          "subject": {"properties": {"status": {"const": "verified"}}},
+          "key_state": {"properties": {"status": {"const": "verified"}}}
+        }
+      }
     },
     "object_links": {
       "type": "object",

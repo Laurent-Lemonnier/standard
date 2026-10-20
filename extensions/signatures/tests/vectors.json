@@ -109,7 +109,7 @@
   "exports": {
     "full": {
       "profile": "dps-portable-verification",
-      "profile_version": "0.1.0",
+      "profile_version": "0.2.0",
       "entries": [
         {
           "decision_id": "DR-2099-001",
@@ -184,7 +184,7 @@
     },
     "extended": {
       "profile": "dps-portable-verification",
-      "profile_version": "0.1.0",
+      "profile_version": "0.2.0",
       "entries": [
         {
           "decision_id": "DR-2099-001",
@@ -281,7 +281,7 @@
     },
     "duplicate_actor": {
       "profile": "dps-portable-verification",
-      "profile_version": "0.1.0",
+      "profile_version": "0.2.0",
       "entries": [
         {
           "decision_id": "DR-2099-001",
@@ -1881,16 +1881,16 @@
         "sealed": {
           "kind": "export",
           "id": "urn:example:export:issuer-1:2026-09-27",
-          "digest": "8b27a1ab0b8881ddcb7f5ef24e55ad59781f0c1d97c31553f589b310ad761422"
+          "digest": "97a8af9ff911b38ec8cbfc06ee971d8f90c34f09327a331f14b34050e0e2c31d"
         },
         "sealed_at": "2026-09-27T12:30:00Z",
         "signature": {
           "algorithm": "Ed25519",
           "key_ref": "org-seal-1",
-          "value_b64": "+d0mScl+b2XmvDhojCGvVHRV7xXUaf94COZfV45bBuOicMb5WNOzHMuCTOjWZ0f4jliK9nklSKgJAjLJk0udCg=="
+          "value_b64": "DTStyDBXMvSJ6kYjOhNyM1IBRoQxbrr+novuXeErW4lvKGkn6SvZNgzJbNhoyO+jVXShRFDc0M0bCoSqJ4zLDA=="
         }
       },
-      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d31000000066578706f72740000002675726e3a6578616d706c653a6578706f72743a6973737565722d313a323032362d30392d3237000000208b27a1ab0b8881ddcb7f5ef24e55ad59781f0c1d97c31553f589b310ad76142200000014323032362d30392d32375431323a33303a30305a"
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d31000000066578706f72740000002675726e3a6578616d706c653a6578706f72743a6973737565722d313a323032362d30392d32370000002097a8af9ff911b38ec8cbfc06ee971d8f90c34f09327a331f14b34050e0e2c31d00000014323032362d30392d32375431323a33303a30305a"
     },
     "seal_record_moved_to_org0": {
       "about": "seal_record_r0's signature presented under key reference org-seal-0",
@@ -2682,13 +2682,13 @@
         "sealed": {
           "kind": "export",
           "id": "urn:example:export:issuer-1:2026-09-27",
-          "digest": "8b27a1ab0b8881ddcb7f5ef24e55ad59781f0c1d97c31553f589b310ad761422"
+          "digest": "97a8af9ff911b38ec8cbfc06ee971d8f90c34f09327a331f14b34050e0e2c31d"
         },
         "sealed_at": "2026-09-27T12:30:00Z",
         "signature": {
           "algorithm": "Ed25519",
           "key_ref": "org-seal-1",
-          "value_b64": "+d0mScl+b2XmvDhojCGvVHRV7xXUaf94COZfV45bBuOicMb5WNOzHMuCTOjWZ0f4jliK9nklSKgJAjLJk0udCg=="
+          "value_b64": "DTStyDBXMvSJ6kYjOhNyM1IBRoQxbrr+novuXeErW4lvKGkn6SvZNgzJbNhoyO+jVXShRFDc0M0bCoSqJ4zLDA=="
         }
       }
     ],
@@ -2904,11 +2904,11 @@
     "trust_policy": {
       "status": "verified"
     },
-    "attachment_digest": "54961d3f913a9d1ce8b05cd0d00e2bb26798c48b3d54e57c0c77cba146a73463",
+    "attachment_digest": "1ea98584ce624faa35ee6dcb0bbc722bc14a547a9a95c1aacf777a95b6df3073",
     "documents": [
       {
         "kind": "export",
-        "digest": "8b27a1ab0b8881ddcb7f5ef24e55ad59781f0c1d97c31553f589b310ad761422"
+        "digest": "97a8af9ff911b38ec8cbfc06ee971d8f90c34f09327a331f14b34050e0e2c31d"
       },
       {
         "kind": "action_binding_attachment",

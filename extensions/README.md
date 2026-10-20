@@ -12,7 +12,7 @@ Licences: in this folder, text is CC BY 4.0 ([LICENSE](../LICENSE)), and schemas
 
 | Extension | Version | Status | Written against |
 |---|---|---|---|
-| [Portable verification](portable-verification/) | 0.1.0 | Proposal | Core v1.2 rev. 10 (`v1.2-rev10`), reference files 5.1.2 (`ref-5.1.2`) |
+| [Portable verification](portable-verification/) | 0.2.0 | Proposal | Core v1.3 rev. 11 (`v1.3-rev11`), reference files 5.2.0 (`ref-5.2.0`) |
 | [Action binding](action-binding/) | 0.2.0 | Proposal | Core v1.3 rev. 11 (`v1.3-rev11`), reference files 5.2.0 (`ref-5.2.0`) |
 | [Anchoring](anchoring/) | 0.2.0 | Proposal | Core v1.3 rev. 11 (`v1.3-rev11`), reference files 5.2.0 (`ref-5.2.0`) |
 | [Signatures](signatures/) | 0.2.0 | Proposal | Core v1.3 rev. 11 (`v1.3-rev11`), reference files 5.2.0 (`ref-5.2.0`) |

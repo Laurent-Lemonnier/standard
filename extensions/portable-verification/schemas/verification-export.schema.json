@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://decisionprovenancestandard.org/extensions/portable-verification/0.1.0/verification-export.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Portable verification extension 0.1.0 (proposal), written against Core v1.2 rev. 10 and reference files 5.1.2. Binds only an implementation that says it uses this extension.",
+  "$id": "https://decisionprovenancestandard.org/extensions/portable-verification/0.2.0/verification-export.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Portable verification extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, with signatures 0.2.0 and anchoring 0.2.0 for a signed entry. Binds only an implementation that says it uses this extension.",
   "title": "Portable verification export",
-  "description": "Sealed decision records exported so that another party can check them. The export sits beside the records: it points to them and carries their sealed bytes, and never adds a field to a record.",
+  "description": "Sealed decision records exported so that another party can check them. The export sits beside the records: it points to them and carries their sealed bytes, and never adds a field to a record. A document that names a member twice, at any depth, is not read.",
   "type": "object",
   "additionalProperties": false,
   "required": ["profile", "profile_version", "entries"],
   "properties": {
     "profile": {"const": "dps-portable-verification"},
-    "profile_version": {"const": "0.1.0"},
+    "profile_version": {"const": "0.2.0"},
     "entries": {
       "type": "array",
       "minItems": 1,
@@ -23,6 +23,7 @@
   "$defs": {
     "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "decision_id": {"type": "string", "pattern": "^DR-[0-9]{4}-[0-9]{3,}$"},
+    "instant": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
     "base64": {
       "type": "string",
       "minLength": 4,
@@ -137,7 +138,7 @@
         "seal_algorithm": {"const": "SHA-256"},
         "seal_field_handling": {
           "enum": ["seal_hash_absent", "seal_hash_zeroed"],
-          "description": "seal_hash_absent: the covered bytes do not contain seal_hash. seal_hash_zeroed: they contain seal_hash with every character of its value replaced by the character 0, which keeps the length of the stored value. Other placeholders, such as an empty string or null, are not covered in 0.1.0."
+          "description": "seal_hash_absent: the covered bytes do not contain seal_hash. seal_hash_zeroed: they contain seal_hash with every character of its value replaced by the character 0, which keeps the length of the stored value. Other placeholders, such as an empty string or null, are not covered."
         },
         "affirmation_record_covered": {
           "type": "boolean",
@@ -205,21 +206,25 @@
       }
     },
     "signature": {
+      "description": "The issuer's signature of the entry: the signatures 0.2.0 organisation seal of kind record, over this entry's decision_id and its digest (seal_hash for an original, derived_digest for a derived representation) and sealed_at, under the signed-bytes rule that profile names. The verifier builds the signed bytes from the entry itself, so a signature moved to another entry, or made over the original's seal for a derived entry, fails. The key comes from the verifier's own trust policy, never from the export.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["algorithm", "key_ref", "signed_bytes_ref", "value_b64"],
+      "required": ["algorithm", "key_ref", "signed_bytes_ref", "sealed_at", "value_b64"],
       "properties": {
-        "algorithm": {"type": "string", "minLength": 1},
+        "algorithm": {"const": "Ed25519"},
         "key_ref": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "A reference to the issuer's key. The key itself comes from the verifier's own trust policy, never from the export."
+          "description": "A reference to the issuer's key, in role organisation in the verifier's trust policy."
         },
         "signed_bytes_ref": {
-          "type": "string",
-          "minLength": 1,
-          "description": "Where the exact signed bytes are defined."
+          "const": "dps-signatures 0.2.0 organisation_seal",
+          "description": "Where the exact signed bytes are defined: the signatures 0.2.0 organisation seal."
+        },
+        "sealed_at": {
+          "$ref": "#/$defs/instant",
+          "description": "The time the issuer states, signed. It is the stated time for the key's state, and never time assurance for the record."
         },
         "value_b64": {"$ref": "#/$defs/base64"}
       }

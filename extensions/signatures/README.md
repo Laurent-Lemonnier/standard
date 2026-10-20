@@ -5,7 +5,7 @@
 | Extension | Signatures |
 | Version | 0.2.0 |
 | Status | Proposal. Not part of the Standard. |
-| Written against | Core v1.3, reading edition rev. 11 (tag `v1.3-rev11`), with reference files 5.2.0 (tag `ref-5.2.0`), portable verification 0.1.0, action binding 0.2.0 and anchoring 0.2.0 |
+| Written against | Core v1.3, reading edition rev. 11 (tag `v1.3-rev11`), with reference files 5.2.0 (tag `ref-5.2.0`), portable verification 0.2.0, action binding 0.2.0 and anchoring 0.2.0 |
 | Licences | This text: CC BY 4.0 ([LICENSE](../../LICENSE)). The schemas (`schemas/`) and the tests (`tests/`): Apache-2.0 ([LICENSES/Apache-2.0.txt](../../LICENSES/Apache-2.0.txt)) |
 
 This extension says how a person signs what they decided, how an organisation signs exactly what it issued, and how a check of those signatures reports what it found. It defines two assertions: the person's signature, made by the reviewer or the affirmer over the outcome they gave or the record they affirmed, and the organisation's seal, made by the issuer over an export, an action-binding attachment or a record. Each is an object beside the records, the export or the attachment. Neither adds a field to a decision record, and neither stands for the other.
@@ -29,7 +29,7 @@ Version 0.2.0 changes 0.1.0 after review, and some documents 0.1.0 allowed are r
 | `seal_hash` | Core §5.1(3), §6.2 | The digest a person affirms in a Core record, and the digest an organisation seals for a record |
 | `affirmation_record` | Core §5.1(3), §5.2, §6.2 | Part of the bytes the person affirms, when the seal covers it; `actor_identity` is the actor the issuer names, compared with the key's holder. Its timestamp and actor stay the issuer's statements |
 | `decision_id` | Core §6.2.1 | Which record, or which attachment, an assertion names |
-| The export, its entries, their covered bytes and `seal_field_handling` | Portable verification 0.1.0, "The export" | Where a record's covered bytes and seal are read, and how the seal field stands in them |
+| The export, its entries, their covered bytes and `seal_field_handling` | Portable verification 0.2.0, "The export" | Where a record's covered bytes and seal are read, and how the seal field stands in them |
 | The outcome stage (`stage_id`, `outcome`, `actor_ref`, `approved_spec_digest`) and its review (`shown_spec_digest`, `shown_view_digest`) | Action binding 0.2.0, "The attachment" | What the person's signature over an outcome names, compared with the attachment |
 | `issuer_signature` | Action binding 0.2.0, "Separate assertions" | Where an attachment may carry a copy of the organisation's seal, replaced by `A` before the attachment is digested |
 | The signed-bytes rule, the key states, the trust policy and the timestamp assertion | Anchoring 0.2.0 | Reused by reference, as below |
@@ -151,9 +151,11 @@ JSON Schema cannot compare two documents, so a reader holding both the report an
 
 This extension reuses, by reference: anchoring 0.2.0's signed-bytes rule, key states, trust policy and timestamp assertion; portable verification's export, covered bytes and seal field handling (items 2 to 5 of its export rules); and action binding's outcome and review stages and its `issuer_signature` member. A record exported under portable verification, its action-binding attachment and its signatures attachment are checked side by side, each under its own extension, against one trust policy. Using signatures requires using anchoring's checks only for a compromised key's revocation, and portable verification only for a person's affirmation or a record's seal read from an export.
 
+Items 2 to 5 of portable verification's export rules are the same in 0.1.0 and 0.2.0, so an export labelled either is read the same by this extension, and a seal over either verifies; this text names 0.2.0 since #51, in which the fixture exports in `tests/vectors.json` were relabelled `0.2.0`, so that `seal_export` and the digests after it moved with them. No rule of this extension changed with it.
+
 Not in this version, and future work:
 
-- Portable verification 0.2.0 and action binding 0.3.0, in which the signature of a signed entry or attachment moves from SHOULD to MUST, referring to this profile for the suite and the signed bytes, and in which an entry's `signature` and an attachment's `issuer_signature` carry the seal's fields (`sealed_at` among them) or point to its object in a signatures attachment.
+- Action binding 0.3.0, in which the attachment's `issuer_signature` moves from SHOULD to MUST, referring to this profile for the suite and the signed bytes, and carries the seal's fields (`sealed_at` among them) as a copy, as portable verification 0.2.0's entry `signature` does since #51.
 - Other suites for the person's signature and the organisation's seal: RSA, with RFC 9500's published test keys as the time-stamp tokens already use, and other WebAuthn algorithms.
 
 ## Dependencies
