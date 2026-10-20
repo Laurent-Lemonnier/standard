@@ -77,6 +77,9 @@ SEAL_DIMENSIONS = ("status", "signature", "subject", "key_state")
 READABLE = {"application/json"}  # media types this check reads a record from
 UP, UV = 0x01, 0x04  # authenticatorData flags: user present, user verified
 SEAL_SIGNED_BYTES_REF = f"{PROFILE} {VERSION} organisation_seal"  # what a copy of a seal names as its signed_bytes_ref
+# The members of an action-binding attachment's copy of its seal (issuer_signature), by the attachment's version.
+COPY_MEMBERS = {"0.2.0": ("algorithm", "key_ref", "signed_bytes_ref", "value_b64"),
+                "0.3.0": ("algorithm", "key_ref", "signed_bytes_ref", "sealed_at", "value_b64")}
 
 
 def sha256(data):
@@ -735,16 +738,22 @@ def check_seal_subject(seal, ctx):
         if as_issued != s["digest"]:
             findings.append(f"the sealed digest is not the digest of the attachment of {s['id']} as issued (with an "
                             "embedded copy of the seal replaced by A)")
-        if "issuer_signature" in att:
+        version = att.get("profile_version")
+        if "issuer_signature" in att and version not in COPY_MEMBERS:
+            # A version this check does not know: it cannot say which members a copy has, so it does not compare.
+            out["embedded_copy"] = "not_checked"
+            findings_copy = [f"the attachment is action binding {version!r}; this check compares a copy of the seal "
+                             f"for action binding {' and '.join(COPY_MEMBERS)} only"]
+        elif "issuer_signature" in att:
             # A copy agrees when every member does: a copy labelled otherwise, or naming other signed bytes, is not a
             # copy of this seal, even where the issuer sealed the attachment so.
             copy_ = att["issuer_signature"]
-            expected = {"algorithm": seal["signature"]["algorithm"], "key_ref": seal["signature"]["key_ref"],
-                        "signed_bytes_ref": SEAL_SIGNED_BYTES_REF, "value_b64": seal["signature"]["value_b64"]}
-            if att.get("profile_version") != "0.2.0":  # action binding 0.3.0: the copy carries sealed_at as well
-                expected["sealed_at"] = seal["sealed_at"]
+            seal_values = {"algorithm": seal["signature"]["algorithm"], "key_ref": seal["signature"]["key_ref"],
+                           "signed_bytes_ref": SEAL_SIGNED_BYTES_REF, "sealed_at": seal["sealed_at"],
+                           "value_b64": seal["signature"]["value_b64"]}
             # The copy is compared by the attachment's version, on exactly its members: a 0.2.0 copy on four, a
-            # 0.3.0 copy on five; a copy with any other member is not a copy of the seal.
+            # 0.3.0 copy on five (sealed_at as well); a copy with any other member is not a copy of the seal.
+            expected = {k: seal_values[k] for k in COPY_MEMBERS[version]}
             differs = [k for k in expected if copy_.get(k) != expected[k]]
             extra = sorted(k for k in copy_ if k not in expected)
             if not differs and not extra:
@@ -758,6 +767,8 @@ def check_seal_subject(seal, ctx):
         else:
             out["embedded_copy"] = "not_checked"
         out["status"] = "failed" if findings else "verified"
+        if "issuer_signature" in att and version not in COPY_MEMBERS:
+            findings = findings + findings_copy  # reported, apart from the sealed digest, which is checked as usual
         if findings:
             out["findings"] = findings
         return out
@@ -1488,6 +1499,25 @@ def vector_case(c, v):
                 bad.append(f"{name}: the sealed digest")
             if c["members"][name] not in " ".join(r.get("findings", [])):
                 bad.append(f"{name}: the finding does not name {c['members'][name]}")
+    elif kind == "copy_by_version":
+        # The copy check goes by the attachment's version: a 0.2.0 attachment's copy agrees on its four members, and
+        # one that also carries sealed_at does not; an attachment of a version the check does not know is not
+        # compared, with the reason. Checked directly: action binding 0.3.0's schema refuses these attachments.
+        s = v["organisation_seals"][c["seal"]]
+        att = s["attachment"]
+        r = check_seal_subject(s["assertion"], {"action_binding": {att["decision_id"]: att}})
+        if (r["status"], r.get("embedded_copy")) != ("verified", "verified"):
+            bad.append("the 0.2.0 attachment's four-member copy taken as not agreeing")
+        five = copy.deepcopy(att)
+        five["issuer_signature"]["sealed_at"] = s["assertion"]["sealed_at"]
+        r = check_seal_subject(s["assertion"], {"action_binding": {att["decision_id"]: five}})
+        if r.get("embedded_copy") != "failed" or "sealed_at" not in " ".join(r.get("findings", [])):
+            bad.append("a 0.2.0 copy carrying sealed_at taken as agreeing")
+        other = copy.deepcopy(att)
+        other["profile_version"] = c["unknown_version"]
+        r = check_seal_subject(s["assertion"], {"action_binding": {att["decision_id"]: other}})
+        if r.get("embedded_copy") != "not_checked" or c["unknown_version"] not in " ".join(r.get("findings", [])):
+            bad.append("an attachment of an unknown version compared, or not said")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")

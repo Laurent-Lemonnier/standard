@@ -517,10 +517,16 @@ def time_assurance(att, signature, ts_results):
                              "issuer's statement"]}
     i, r = min(covering, key=lambda c: c[1]["_upper"])
     t = r["existed_no_later_than"]
+    findings = [f"the issuer signature, and so the attachment's bytes as issued, existed no later than {t} "
+                f"({r['tsa_ref']}); not when any stage happened"]
+    # A stage the attachment dates after the time by which its signed bytes existed: the issuer's stage times are
+    # inconsistent with the timestamp. A finding, not a failure: the times are the issuer's statements.
+    latest = latest_stage_time(att)
+    if latest is not None and latest > r["_upper"]:
+        findings.append(f"the attachment records a stage at {sig.iso(latest)}, later than {t}, by which its signed "
+                        "bytes existed: the issuer's stage times are inconsistent with the timestamp")
     return {"status": "verified", "basis": "independent_source", "source_ref": r["tsa_ref"], "no_later_than": t,
-            "timestamp_index": i,
-            "findings": [f"the issuer signature, and so the attachment's bytes as issued, existed no later than {t} "
-                         f"({r['tsa_ref']}); not when any stage happened"]}
+            "timestamp_index": i, "findings": findings}
 
 
 # ---------------------------------------------------------------- the whole set: the reference report
@@ -887,6 +893,11 @@ def signature_case(c, v, data, validators):
             summary[k] = s.get(k)
     if "no_later_than" in c["expected"]:
         summary["no_later_than"] = r["time_assurance"].get("no_later_than")
+    if "stage_after_timestamp" in c["expected"]:
+        summary["stage_after_timestamp"] = any("inconsistent with the timestamp" in f
+                                               for f in r["time_assurance"].get("findings", []))
+    if "timestamp_index" in c["expected"]:
+        summary["timestamp_index"] = r["time_assurance"].get("timestamp_index")
     if "sealed_at_note" in c["expected"]:
         summary["sealed_at_note"] = ("earlier_than_a_stage" if any(f.startswith("sealed_at") and "earlier" in f
                                                                    for f in s.get("findings", [])) else None)
@@ -905,7 +916,11 @@ def expected_signature(c):
 
 def pairing_case(c, v, data, validators):
     attachments, records, policy, beside, digests = context_for(c, v, data, validators)
-    report = sig.apply_patch(v["base_report"], c.get("report_patch", []), v, digests)
+    # report: "reference" starts from the reference report of the documents the case reads, instead of base_report,
+    # so that a case can change one dimension of a report that is otherwise right.
+    base = (reference(reference_report, attachments, records, policy, beside) if c.get("report") == "reference"
+            else v["base_report"])
+    report = sig.apply_patch(base, c.get("report_patch", []), v, digests)
     if errors(validators["report"], report):
         return "error", "the report must be schema-valid for this case: " + errors(validators["report"], report)[0]
     problems = reference(read_with_attachments, report, attachments, records, policy, beside)
