@@ -157,6 +157,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r tools/requirements.txt
+      - run: pip install -r extensions/action-binding/tests/requirements.txt
       - run: python extensions/action-binding/tests/run_checks.py
 
   anchoring:

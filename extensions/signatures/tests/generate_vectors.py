@@ -24,7 +24,7 @@ Re-running this script writes the same bytes, and run_checks.py checks that it d
 
 Records R0 to R2 and R4, the export and the links are those of the anchoring vectors (R0 to R2 from portable
 verification). Specification S0 is the one of action binding's cases. The action-binding attachments are built
-here in the shape of action binding 0.2.0.
+here in the shape of action binding 0.3.0: the copy of the seal has five members, sealed_at written in place.
 
 Usage:  python extensions/signatures/tests/generate_vectors.py            write vectors.json
         python extensions/signatures/tests/generate_vectors.py --check    exit 1 if vectors.json differs
@@ -332,9 +332,9 @@ def specification(spec_text):
 
 
 def approved_attachment(spec_digest, view_digest):
-    """Action binding 0.2.0: an AI proposal, a review that was shown the specification and a view, an approval."""
+    """Action binding 0.3.0: an AI proposal, a review that was shown the specification and a view, an approval."""
     return {
-        "profile": "dps-action-binding", "profile_version": "0.2.0", "decision_id": DECISION_A,
+        "profile": "dps-action-binding", "profile_version": "0.3.0", "decision_id": DECISION_A,
         "action_specifications": [specification(SPECIFICATION)],
         "stages": [
             {"stage_id": "p1", "kind": "proposal", "at": "2026-10-01T09:00:00Z", "origin": "ai",
@@ -355,10 +355,10 @@ def approved_attachment(spec_digest, view_digest):
 
 
 def rejected_attachment(spec_digest):
-    """Action binding 0.2.0: the same specification proposed again for another record, shown with no view digest,
+    """Action binding 0.3.0: the same specification proposed again for another record, shown with no view digest,
     and rejected."""
     return {
-        "profile": "dps-action-binding", "profile_version": "0.2.0", "decision_id": DECISION_B,
+        "profile": "dps-action-binding", "profile_version": "0.3.0", "decision_id": DECISION_B,
         "action_specifications": [specification(SPECIFICATION)],
         "stages": [
             {"stage_id": "p1", "kind": "proposal", "at": "2026-10-02T09:00:00Z", "origin": "ai",
@@ -527,10 +527,11 @@ def make_seal(keys, key_name, sealed, sealed_at, presented=None, signed_as=None)
     return out
 
 
-def embedded_signature(key_ref, value_b64):
-    """Action binding 0.2.0's issuer_signature member, holding a copy of the organisation's seal."""
+def embedded_signature(key_ref, value_b64, sealed_at):
+    """Action binding 0.3.0's issuer_signature member, holding a copy of the organisation's seal: its five members,
+    sealed_at written in place (a 0.2.0 copy had four)."""
     return {"algorithm": "Ed25519", "key_ref": key_ref, "signed_bytes_ref": f"{PROFILE} {VERSION} organisation_seal",
-            "value_b64": value_b64}
+            "sealed_at": sealed_at, "value_b64": value_b64}
 
 
 # ---------------------------------------------------------------- the whole file
@@ -743,16 +744,17 @@ def build():
 
     # The seal of an attachment that carries a copy of it: sign the digest of the bytes with the copy's value made of
     # A, then put the value in place.
-    placeholder = embedded_signature("org-seal-1", "A" * ED25519_SIGNATURE_B64_LENGTH)
+    sealed_at_a = "2026-10-01T09:30:00Z"
+    placeholder = embedded_signature("org-seal-1", "A" * ED25519_SIGNATURE_B64_LENGTH, sealed_at_a)
     ab_approved["issuer_signature"] = placeholder
     digest_with_placeholder = sha256(compact(ab_approved)).hex()
     mk_seal("seal_attachment", "org-seal-1 seals the attachment of DR-2099-101, which carries a copy of the seal as "
-            "its issuer_signature", "org-seal-1",
-            {"kind": "attachment", "id": DECISION_A, "digest": digest_with_placeholder}, "2026-10-01T09:30:00Z")
+            "its issuer_signature (action binding 0.3.0: five members, sealed_at written in place)", "org-seal-1",
+            {"kind": "attachment", "id": DECISION_A, "digest": digest_with_placeholder}, sealed_at_a)
     value = seals["seal_attachment"]["assertion"]["signature"]["value_b64"]
     if len(value) != ED25519_SIGNATURE_B64_LENGTH:
         raise ValueError("an Ed25519 signature in padded base64 has 88 characters")
-    ab_approved["issuer_signature"] = embedded_signature("org-seal-1", value)
+    ab_approved["issuer_signature"] = embedded_signature("org-seal-1", value, sealed_at_a)
     # Copies that are not copies: the issuer sealed the attachment with a copy whose algorithm label, or whose
     # signed_bytes_ref, is not the seal's. The sealed digest matches those bytes; the copy does not agree. Each seal
     # gives the member as the issuer wrote it (issuer_signature), the value in place, for the cases to put in.
@@ -765,10 +767,29 @@ def build():
              "signed_bytes_ref names anchoring's checkpoint: the digest matches; the copy does not agree with the seal",
              {"signed_bytes_ref": "dps-anchoring 0.2.0 checkpoint"})):
         variant = copy.deepcopy(ab_approved)
-        variant["issuer_signature"] = dict(placeholder, **member)
+        variant["issuer_signature"] = dict(embedded_signature("org-seal-1", "A" * ED25519_SIGNATURE_B64_LENGTH,
+                                                              "2026-10-01T09:32:00Z"), **member)
         mk_seal(name, about, "org-seal-1",
                 {"kind": "attachment", "id": DECISION_A, "digest": sha256(compact(variant)).hex()},
                 "2026-10-01T09:32:00Z")
+        seals[name]["issuer_signature"] = dict(variant["issuer_signature"],
+                                               value_b64=seals[name]["assertion"]["signature"]["value_b64"])
+    # A copy whose sealed_at is not the seal's, with the same value, and a copy with a member a copy does not have:
+    # both sit under the sealed digest, so only the issuer can write them; the seal verifies, and the copy does not
+    # agree. Action binding 0.3.0's schema refuses the second; this check, which does not read that schema, does not
+    # take it for a copy either.
+    for name, about, copy_time, extra in (
+            ("seal_attachment_copy_other_time", "org-seal-1 seals the attachment of DR-2099-101 carrying a copy whose "
+             "sealed_at is 09:35, the seal stating 09:30: the digest matches; the copy does not agree with the seal",
+             "2026-10-01T09:35:00Z", {}),
+            ("seal_attachment_copy_extra_member", "org-seal-1 seals the attachment of DR-2099-101 carrying a copy with "
+             "a member a copy does not have (holder): the digest matches; the copy does not agree with the seal",
+             sealed_at_a, {"holder": "Example issuer (test only)"})):
+        variant = copy.deepcopy(ab_approved)
+        variant["issuer_signature"] = dict(embedded_signature("org-seal-1", "A" * ED25519_SIGNATURE_B64_LENGTH,
+                                                              copy_time), **extra)
+        mk_seal(name, about, "org-seal-1",
+                {"kind": "attachment", "id": DECISION_A, "digest": sha256(compact(variant)).hex()}, sealed_at_a)
         seals[name]["issuer_signature"] = dict(variant["issuer_signature"],
                                                value_b64=seals[name]["assertion"]["signature"]["value_b64"])
     # The copy written with an escape: JSON lets a writer escape / as \/. The rule replaces the value's characters,

@@ -558,29 +558,33 @@ def digest_against_entry(value_hex, entry, what):
 
 
 def check_person_subject(ps, ctx):
-    """The signed fields against the document they name. Returns the dimension, the actor the issuer names, and the
-    reason the actor is not read where covered bytes match the seal but are not read (None otherwise)."""
+    """The signed fields against the document they name. Returns the dimension, the actor the issuer names, and why
+    no actor is read where none is: ("not_read", reason) for covered bytes that match the seal but are not read,
+    ("none_read", reason) for covered bytes the verifier does not hold or cannot match, ("not_held", reason) for a
+    document the verifier does not hold at all; None where the document is read."""
     kind = ps["assertion"]
     if kind == "person_affirmation":
         entry = record_entry(ctx.get("export"), ps["decision_id"])
         if entry is None:
-            return ({"status": "not_checked", "findings": [f"the export holds no sealed entry for {ps['decision_id']}"]},
-                    None, None)
+            reason = f"the export holds no sealed entry for {ps['decision_id']}"
+            return {"status": "not_checked", "findings": [reason]}, None, ("not_held", reason)
         status, findings = digest_against_entry(ps["affirmed_digest"], entry, "the affirmed digest")
         record, not_read = covered_record(entry)
+        why = None
         if not_read:  # the digest stands; whatever actor these bytes name is not read from them
             findings = findings + [not_read]
+            why = ("not_read", not_read)
         elif record is None:  # no bytes to read an actor from: unavailable, not readable, or not the seal's
-            not_read = f"no covered bytes of {ps['decision_id']} that match the seal are read"
+            why = ("none_read", f"no covered bytes of {ps['decision_id']} that match the seal are read")
         out = {"status": status, "checked_against": "export_entry",
                "covers_affirmation_record": entry["seal"]["affirmation_record_covered"]}
         if findings:
             out["findings"] = findings
-        return out, entry_actor(entry), not_read
+        return out, entry_actor(entry), why
     att = (ctx.get("action_binding") or {}).get(ps["decision_id"])
     if att is None:
-        return ({"status": "not_checked", "findings": [f"the verifier holds no action-binding attachment for "
-                                                      f"{ps['decision_id']}"]}, None, None)
+        reason = f"the verifier holds no action-binding attachment for {ps['decision_id']}"
+        return {"status": "not_checked", "findings": [reason]}, None, ("not_held", reason)
     out = {"checked_against": "action_binding_attachment"}
     by_id = {}
     for s in att["stages"]:
@@ -635,11 +639,17 @@ def check_identity(key, policy_result, signature, key_state, issuer_named, actor
                              "a person's key names the source its binding rests on"]}
     out = {"basis": "trust_policy", "source_ref": key["identity_source_ref"], "holder": key["holder"]}
     if issuer_named is None:
-        # Two cases, told apart in the finding: bytes that are read and name no actor, or bytes that are not read,
-        # which may name one or not; the check says only what it knows.
-        out.update(status="not_checked", findings=[
-            "no actor is read from the covered bytes or compared with the key's holder: " + actor_not_read
-            if actor_not_read else "the issuer names no actor to compare with the key's holder"])
+        # Three cases, told apart in the finding: a document that is read and names no actor; covered bytes that are
+        # not read, which may name one or not; a document the verifier does not hold. The check says only what it
+        # knows.
+        if actor_not_read is None:
+            finding = "the issuer names no actor to compare with the key's holder"
+        elif actor_not_read[0] == "not_held":
+            finding = ("nothing is held to read an actor from, so none is compared with the key's holder: "
+                       + actor_not_read[1])
+        else:
+            finding = "no actor is read from the covered bytes or compared with the key's holder: " + actor_not_read[1]
+        out.update(status="not_checked", findings=[finding])
         return out
     out["issuer_named"] = issuer_named
     if issuer_named != key["holder"]:
@@ -731,14 +741,20 @@ def check_seal_subject(seal, ctx):
             copy_ = att["issuer_signature"]
             expected = {"algorithm": seal["signature"]["algorithm"], "key_ref": seal["signature"]["key_ref"],
                         "signed_bytes_ref": SEAL_SIGNED_BYTES_REF, "value_b64": seal["signature"]["value_b64"]}
+            if att.get("profile_version") != "0.2.0":  # action binding 0.3.0: the copy carries sealed_at as well
+                expected["sealed_at"] = seal["sealed_at"]
+            # The copy is compared by the attachment's version, on exactly its members: a 0.2.0 copy on four, a
+            # 0.3.0 copy on five; a copy with any other member is not a copy of the seal.
             differs = [k for k in expected if copy_.get(k) != expected[k]]
-            if not differs:
+            extra = sorted(k for k in copy_ if k not in expected)
+            if not differs and not extra:
                 out["embedded_copy"] = "verified"
             else:
                 out["embedded_copy"] = "failed"
                 findings.append("the attachment's issuer_signature is not a copy of this seal: " + "; ".join(
-                    "its value is not the seal's" if k == "value_b64" else f"its {k} is {copy_.get(k)!r}, the seal's "
-                    f"{expected[k]!r}" for k in differs))
+                    ["its value is not the seal's" if k == "value_b64" else f"its {k} is {copy_.get(k)!r}, the seal's "
+                     f"{expected[k]!r}" for k in differs]
+                    + ([f"it carries {', '.join(extra)}, which a copy of a seal does not"] if extra else [])))
         else:
             out["embedded_copy"] = "not_checked"
         out["status"] = "failed" if findings else "verified"
@@ -1043,15 +1059,19 @@ def not_integers(doc, path=""):
     """The paths of the numbers in a document that are not written as JSON integers, such as 0.0. Walked with a
     stack, not by recursion: the report schema leaves some values open (a timestamp subject's `of`), and a
     schema-valid report nested deeper than the interpreter's call stack is still read."""
-    found, stack = [], [(doc, path)]
-    while stack:
-        x, at = stack.pop()
+    found, stack = [], [(doc, None)]  # each value with its place: (key, the parent's place), built into a path
+    while stack:                      # only for a number that is found, so a deep report with long names stays quick
+        x, place = stack.pop()
         if isinstance(x, float):
-            found.append(at)
+            parts = []
+            while place is not None:
+                parts.append(str(place[0]))
+                place = place[1]
+            found.append(path + "".join(f"/{p}" for p in reversed(parts)))
         elif isinstance(x, dict):
-            stack.extend((v, f"{at}/{k}") for k, v in reversed(list(x.items())))
+            stack.extend((v, (k, place)) for k, v in reversed(list(x.items())))
         elif isinstance(x, list):
-            stack.extend((v, f"{at}/{i}") for i, v in reversed(list(enumerate(x))))
+            stack.extend((v, (i, place)) for i, v in reversed(list(enumerate(x))))
     return found
 
 def digest_or_none(doc):
@@ -1453,6 +1473,21 @@ def vector_case(c, v):
             pass
         except RecursionError:
             bad.append("the reader stopped instead of refusing the value")
+    elif kind == "copy_members":
+        # The copy check reads no action-binding schema: a copy with a member a copy does not have, or a 0.3.0 copy
+        # whose sealed_at is not the seal's, does not agree, the sealed digest matching the bytes as issued. The
+        # attachment with the extra member is not valid under action binding's schema, so it is checked here directly.
+        for name in c["seals"]:
+            s = v["organisation_seals"][name]
+            att = copy.deepcopy(v["action_binding_attachments"][c["decision_id"]])
+            att["issuer_signature"] = s["issuer_signature"]
+            r = check_seal_subject(s["assertion"], {"action_binding": {c["decision_id"]: att}})
+            if (r.get("embedded_copy"), r["status"]) != ("failed", "failed"):
+                bad.append(f"{name}: the copy taken as agreeing")
+            if sha256(attachment_bytes_for_seal(att)).hex() != s["assertion"]["sealed"]["digest"]:
+                bad.append(f"{name}: the sealed digest")
+            if c["members"][name] not in " ".join(r.get("findings", [])):
+                bad.append(f"{name}: the finding does not name {c['members'][name]}")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")
@@ -1531,9 +1566,10 @@ def person_case(c, v, validators):
             summary[k] = r["subject"].get(k)
     if "consistency" in c["expected"]:
         summary["consistency"] = r["identity"].get("consistency")
-    if "identity_reason" in c["expected"]:  # why no actor was compared: covered bytes not read, or none to read
+    if "identity_reason" in c["expected"]:  # why no actor was compared: bytes not read, none to read, nothing held
         f = " ".join(r["identity"].get("findings", []))
-        summary["identity_reason"] = (None if not f.startswith("no actor is read from the covered bytes") else
+        summary["identity_reason"] = ("not_held" if f.startswith("nothing is held to read an actor from") else
+                                      None if not f.startswith("no actor is read from the covered bytes") else
                                       "not_read" if "but are not read:" in f else "none_read")
     detail = [f"{d}: {f}" for d in PERSON_DIMENSIONS[1:] for f in r[d].get("findings", [])] + r.get("findings", [])
     return summary, "; ".join(detail)

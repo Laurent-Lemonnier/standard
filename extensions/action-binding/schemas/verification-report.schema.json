@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://decisionprovenancestandard.org/extensions/action-binding/0.2.0/verification-report.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Action binding extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0. Binds only an implementation that says it uses this extension.",
+  "$id": "https://decisionprovenancestandard.org/extensions/action-binding/0.3.0/verification-report.schema.json",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Action binding extension 0.3.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, with signatures 0.2.0 and anchoring 0.2.0 for a signed attachment. Binds only an implementation that says it uses this extension.",
   "title": "Action binding verification report",
   "description": "What a verifier found in a set of execution-evidence attachments, dimension by dimension, with the scope of its conclusion. There is deliberately no overall result: no dimension stands for the others, and nothing here is a legal conclusion or a Conformance Level.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["profile", "profile_version", "attachment_count", "trust_policy_ref", "results", "scope_of_conclusion"],
+  "required": ["profile", "profile_version", "attachment_count", "trust_policy_ref", "trust_policy", "results", "scope_of_conclusion"],
   "properties": {
     "profile": {"const": "dps-action-binding-report"},
-    "profile_version": {"const": "0.2.0"},
+    "profile_version": {"const": "0.3.0"},
     "attachment_count": {
       "type": "integer",
       "minimum": 1,
@@ -18,13 +18,35 @@
     "trust_policy_ref": {
       "type": "string",
       "minLength": 1,
-      "description": "The trust policy the verifier configured independently of the attachments."
+      "description": "The trust policy the verifier configured independently of the attachments: anchoring 0.2.0's."
+    },
+    "trust_policy": {
+      "description": "Whether the policy itself was accepted: one public key, one key reference, one holder, one role; one reference, one entry (anchoring 0.2.0). A refused policy fails every issuer signature. The same object as in an anchoring, signatures or portable verification report. A verifier holding only unsigned attachments still names the policy it would use and says whether it accepts it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["verified", "failed"]},
+        "findings": {"$ref": "#/$defs/findings"}
+      }
+    },
+    "signatures_attachment_digest": {
+      "$ref": "#/$defs/sha256_hex",
+      "description": "SHA-256 of the signatures 0.2.0 attachment read beside the attachments, as received, when one was: the seals carried beside and the independent timestamps over signature values come from it."
     },
     "results": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/result"}},
     "scope_of_conclusion": {"$ref": "#/$defs/scope_of_conclusion"}
   },
+  "if": {"properties": {"trust_policy": {"properties": {"status": {"const": "failed"}}, "required": ["status"]}}, "required": ["trust_policy"]},
+  "then": {
+    "description": "A refused policy: no issuer signature verifies.",
+    "properties": {"results": {"items": {"properties": {"issuer_signature": {"properties": {"status": {"enum": ["failed", "not_checked", "unavailable"]}}}}}}}
+  },
   "$defs": {
     "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ref": {"type": "string", "minLength": 1, "maxLength": 256},
+    "instant": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "index": {"type": "integer", "minimum": 0},
     "status": {"enum": ["verified", "failed", "not_checked", "unavailable", "not_supported"]},
     "findings": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "check": {
@@ -37,7 +59,7 @@
       }
     },
     "assurance": {
-      "description": "Identity, authority, time or legal signature. An issuer's own assertion, signed or not, is never reported as verified.",
+      "description": "Identity, authority or legal signature. An issuer's own assertion, signed or not, is never reported as verified.",
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "basis"],
@@ -50,19 +72,82 @@
       "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
       "then": {"required": ["source_ref"], "properties": {"basis": {"const": "independent_source"}}}
     },
-    "issuer_signature": {
-      "description": "A signature over the attachment. Verified, it attests only that the issuer recorded these claims.",
+    "time_assurance": {
+      "description": "Time. Verified only against a verified independent timestamp over this attachment's verified issuer signature, from the signatures attachment read beside: it shows that the signature, and so the attachment's bytes as issued, existed no later than no_later_than. It never shows when any stage happened; the stage times and sealed_at are the issuer's assertions.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "basis"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "basis": {"enum": ["issuer_assertion", "independent_source"]},
+        "source_ref": {"type": "string", "minLength": 1, "description": "The authority the policy pins (its tsa_ref)."},
+        "no_later_than": {"$ref": "#/$defs/instant", "description": "genTime plus the token's accuracy, if it states one: the time T by which the signature existed."},
+        "timestamp_index": {"$ref": "#/$defs/index", "description": "The timestamp in the signatures attachment."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {"required": ["source_ref", "no_later_than", "timestamp_index"], "properties": {"basis": {"const": "independent_source"}}},
+      "else": {"not": {"anyOf": [{"required": ["no_later_than"]}, {"required": ["timestamp_index"]}]}}
+    },
+    "key_state": {
+      "description": "The key's state when the signature was made, as anchoring 0.2.0 defines it, with the copy's sealed_at as the stated time. time_basis says what that time rests on: stated_time is the issuer's own statement, never independent time; independent_timestamp is a verified timestamp over the signature value, from the signatures attachment read beside.",
       "type": "object",
       "additionalProperties": false,
       "required": ["status"],
       "properties": {
         "status": {"$ref": "#/$defs/status"},
-        "reference_source": {"enum": ["same_attachment", "trust_policy"], "description": "Where the key came from."},
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "revocation_reason": {"enum": ["superseded", "compromised"]},
+        "time_basis": {"enum": ["stated_time", "independent_timestamp"]},
+        "time": {"$ref": "#/$defs/instant"},
+        "timestamp_index": {"$ref": "#/$defs/index", "description": "The timestamp the time rests on, in the signatures attachment."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+          "then": {"required": ["key_ref", "time_basis", "time"]}
+        },
+        {
+          "if": {"properties": {"time_basis": {"const": "independent_timestamp"}}, "required": ["time_basis"]},
+          "then": {"required": ["timestamp_index"]},
+          "else": {"not": {"required": ["timestamp_index"]}}
+        },
+        {
+          "description": "After a compromise, only an independent timestamp earlier than revoked_at establishes the time.",
+          "if": {
+            "properties": {"status": {"const": "verified"}, "revocation_reason": {"const": "compromised"}},
+            "required": ["status", "revocation_reason"]
+          },
+          "then": {"properties": {"time_basis": {"const": "independent_timestamp"}}}
+        }
+      ]
+    },
+    "issuer_signature": {
+      "description": "The copy of the organisation's seal, as one dimension: the holder the policy names for the key issued these exact bytes under this decision_id. Verified only when the signature over the bytes the verifier built from the attachment verifies with the policy's key, in role organisation, and the key's state when it signed is verified. It attests only that the issuer recorded these claims. holder is the holder the policy gives for the key: the attachment names no issuer. certificate says that the certificate the policy pins for the key holds it (verified), or that none is pinned (not_checked): no chain to a trusted list, no revocation check. An unsigned attachment is not_checked, with the finding that it carries no signature; it is never verified. Anyone holding a signed attachment can remove issuer_signature and present it as unsigned: a relying party that needs a signed attachment requires one in its own configuration.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "key_ref": {"$ref": "#/$defs/ref"},
+        "algorithm": {"type": "string", "minLength": 1},
+        "holder": {"type": "string", "minLength": 1},
+        "reference_source": {"const": "trust_policy", "description": "Where the key came from: only ever the policy."},
+        "certificate": {"$ref": "#/$defs/status"},
+        "key_state": {"$ref": "#/$defs/key_state"},
         "attests": {"const": "issuer_recorded_claims_only"},
         "findings": {"$ref": "#/$defs/findings"}
       },
       "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
-      "then": {"required": ["reference_source", "attests"], "properties": {"reference_source": {"const": "trust_policy"}}}
+      "then": {
+        "required": ["key_ref", "algorithm", "holder", "reference_source", "key_state", "attests"],
+        "properties": {
+          "algorithm": {"const": "Ed25519"},
+          "certificate": {"enum": ["verified", "not_checked"]},
+          "key_state": {"properties": {"status": {"const": "verified"}}}
+        }
+      }
     },
     "specification_result": {
       "type": "object",
@@ -202,7 +287,7 @@
         "rationale_provenance": {"$ref": "#/$defs/check"},
         "identity_assurance": {"$ref": "#/$defs/assurance"},
         "authority_assurance": {"$ref": "#/$defs/assurance"},
-        "time_assurance": {"$ref": "#/$defs/assurance"},
+        "time_assurance": {"$ref": "#/$defs/time_assurance"},
         "issuer_signature": {"$ref": "#/$defs/issuer_signature"},
         "legal_signature": {"$ref": "#/$defs/assurance"}
       },
