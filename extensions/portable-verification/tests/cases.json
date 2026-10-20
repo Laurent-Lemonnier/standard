@@ -66,7 +66,11 @@
     {"id": "P37", "description": "an unsigned entry, reported not checked with the finding", "schema": "report", "patch": [{"set": "/entries/1/cryptographic_verification/signature", "value": {"status": "not_checked", "findings": ["the entry carries no signature"]}}, {"set": "/entries/1/time_assurance", "value": {"status": "not_checked", "basis": "issuer_assertion"}}], "expected": "pass"},
     {"id": "P38", "description": "a verified signature naming no key reference", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/key_ref"}], "expected": "fail"},
     {"id": "P39", "description": "a verified signature naming no algorithm", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/algorithm"}], "expected": "fail"},
-    {"id": "P40", "description": "a verified signature with no key state", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/key_state"}], "expected": "fail"}
+    {"id": "P40", "description": "a verified signature with no key state", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/key_state"}], "expected": "fail"},
+    {"id": "P41", "description": "a verified key state naming no key reference", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/key_state/key_ref"}], "expected": "fail"},
+    {"id": "P42", "description": "a verified key state that does not say what its time rests on", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/key_state/time_basis"}], "expected": "fail"},
+    {"id": "P43", "description": "a verified key state with no time", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/key_state/time"}], "expected": "fail"},
+    {"id": "P44", "description": "a verified signature that does not say where the key came from", "schema": "report", "patch": [{"remove": "/entries/1/cryptographic_verification/signature/reference_source"}], "expected": "fail"}
   ],
   "vector_cases": [
     {"id": "W01", "description": "SHA-256 known value for 'abc' (FIPS 180-2)", "check": "known_vector", "text": "abc", "digest": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "expected": "match"},
@@ -79,6 +83,7 @@
     {"id": "W08", "description": "each export seal's sealed digest is the SHA-256 of its export's bytes as issued", "check": "export_seal_digest", "seals": {"export": "signed", "export_org_x": "signed", "export_with_derived": "with_derived"}, "expected": "match"},
     {"id": "W09", "description": "the reference report of the base export, read with the attachment beside it and the policy, is base_report", "check": "base_report", "expected": "match"},
     {"id": "W10", "description": "vectors.json is what generate_vectors.py writes, byte for byte", "check": "reproduction", "expected": "match"},
+    {"id": "W12", "description": "the signed export written with entry 0 naming decision_id twice, sealed as a reader keeping the last member reads it: a strict reader does not read it; a reader keeping the last member finds the signed export, one keeping the first another export, and one seal over the bytes verifies for both", "check": "export_duplicate_member", "text": "export_dup_member", "export": "signed", "seal": "export_dup_member", "expected": "match"},
     {"id": "W11", "description": "R0d names decision_id twice: a strict reader does not read it, a reader keeping the last member reads DR-2099-001, one keeping the first reads DR-2099-042; its digest is the recorded one", "check": "duplicate_member", "record": "R0d", "member": "decision_id", "first": "DR-2099-042", "last": "DR-2099-001", "expected": "match"}
   ],
   "digest_cases": [
