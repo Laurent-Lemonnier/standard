@@ -311,6 +311,29 @@ def build():
                                                                      "digest": sha256(compact(exports["with_derived"])).hex()},
                                                    EXPORT_SEALED_AT)}
 
+    # The signed export written with entry 0 naming decision_id twice, DR-2099-042 first and DR-2099-001 last, and
+    # sealed as a reader keeping the last member reads it: a reader keeping the last member finds the signed export,
+    # one keeping the first reads another export, and one seal covers both readings. Only the issuer can write that;
+    # a strict reader does not read it.
+    written = compact(exports["signed"])
+    marker = b'"decision_id":"DR-2099-001"'
+    if written.count(marker) != 1:
+        raise ValueError("the signed export does not name DR-2099-001 once as an entry's decision_id")
+    dup = written.replace(marker, b'"decision_id":"DR-2099-042",' + marker, 1)
+    if json.loads(dup) != exports["signed"]:
+        raise ValueError("a reader keeping the last member does not find the signed export")
+    seals["export_dup_member"] = {"about": "org-seal-1 seals the export written with entry 0 naming decision_id twice "
+                                           "(export_dup_member), as a reader keeping the last member reads it",
+                                  **sg.make_seal(ed, "org-seal-1", {"kind": "export", "id": EXPORT_ID + ":dup",
+                                                                   "digest": sha256(dup).hex()}, EXPORT_SEALED_AT)}
+    texts = {"export_dup_member": {
+        "about": "The signed export written with entry 0 naming decision_id twice, DR-2099-042 first and DR-2099-001 "
+                 "last, sealed as a reader keeping the last member reads it (export_seals/export_dup_member). Not read "
+                 "under this extension: a reader keeping the last member finds the signed export and the seal "
+                 "verifies for it; one keeping the first reads another export, and the same seal verifies for that.",
+        "export_text": dup.decode("utf-8"), "differs_at": "/entries/0/decision_id",
+        "first_member": "DR-2099-042", "last_member": "DR-2099-001", "sealed_digest": sha256(dup).hex()}}
+
     tsa1 = (ecc["tsa-example-1"], tsa_certs["tsa-example-1"])
     tsa2 = (ecc["tsa-example-2"], tsa_certs["tsa-example-2"])
     tokens, timestamps = {}, {}
@@ -437,6 +460,7 @@ def build():
         "exports": exports,
         "entry_signatures": sigs,
         "export_seals": seals,
+        "texts": texts,
         "tokens": tokens,
         "timestamps": timestamps,
         "signatures_attachments": attachments,

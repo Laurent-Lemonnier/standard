@@ -768,6 +768,37 @@
         }
       },
       "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d31000000066578706f72740000002e75726e3a6578616d706c653a6578706f72743a6973737565722d313a323032362d30392d32383a6465726976656400000020a0f9ddcbcd18fab52cbd32c780ab73b4746f17592e9f7a4607e0aecfe8dadfaa00000014323032362d30392d32385430393a30303a30305a"
+    },
+    "export_dup_member": {
+      "about": "org-seal-1 seals the export written with entry 0 naming decision_id twice (export_dup_member), as a reader keeping the last member reads it",
+      "signed_with": "org-seal-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "organisation_seal",
+        "sealed": {
+          "kind": "export",
+          "id": "urn:example:export:issuer-1:2026-09-28:dup",
+          "digest": "01da2dc8e0978aa300de3d619981b7b23016a57d0c6c6282a5b2d24ec0b4ed80"
+        },
+        "sealed_at": "2026-09-28T09:00:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "org-seal-1",
+          "value_b64": "DUzigphVaEBcRRuBDUZsuANBhdgxeKfa2llSbZS0+oGn9ocL74dZgJ0YqVdXGQkVQ6FWr8Q58WW6+0cMJJA2AQ=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d31000000066578706f72740000002a75726e3a6578616d706c653a6578706f72743a6973737565722d313a323032362d30392d32383a6475700000002001da2dc8e0978aa300de3d619981b7b23016a57d0c6c6282a5b2d24ec0b4ed8000000014323032362d30392d32385430393a30303a30305a"
+    }
+  },
+  "texts": {
+    "export_dup_member": {
+      "about": "The signed export written with entry 0 naming decision_id twice, DR-2099-042 first and DR-2099-001 last, sealed as a reader keeping the last member reads it (export_seals/export_dup_member). Not read under this extension: a reader keeping the last member finds the signed export and the seal verifies for it; one keeping the first reads another export, and the same seal verifies for that.",
+      "export_text": "{\"profile\":\"dps-portable-verification\",\"profile_version\":\"0.2.0\",\"entries\":[{\"decision_id\":\"DR-2099-042\",\"decision_id\":\"DR-2099-001\",\"record_type\":\"decision\",\"covered_representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"covered_bytes_b64\":\"eyJkZWNpc2lvbl9pZCI6IkRSLTIwOTktMDAxIiwiY2hhcnRlcl9pZCI6IkNILUVYQU1QTEUtMSIsInJlY29yZF90eXBlIjoiZGVjaXNpb24iLCJyZWNvcmRfc3RhdGUiOiJkcmFmdGVkIiwiZGlzcGF0Y2hfbW9kZSI6Im1vZGUtMSIsImNyZWF0ZWRfYXQiOiIyMDI2LTA5LTI1VDEwOjAwOjAwWiIsImFsdGl0dWRlIjoiZXhlY3V0aXZlIiwiZGVjaXNpb25fc3RhdGVtZW50IjoiQWRvcHQgb3B0aW9uIEIgZm9yIHRoZSBleGFtcGxlIHZlbmRvciByZXZpZXcuIiwiYWZmaXJtYXRpb25fcmVjb3JkIjp7InRpbWVzdGFtcCI6IjIwMjYtMDktMjVUMTE6MDA6MDBaIiwiYWN0b3JfaWRlbnRpdHkiOiJvd25lci1leGFtcGxlLTEiLCJtZXRob2QiOiJhcHByb3ZhbCB0b2tlbiJ9LCJzZWFsX2FsZ29yaXRobSI6IlNIQS0yNTYifQ==\"},\"seal\":{\"seal_hash\":\"4671e381366fcdad7f6e2951619fa16622d826a4bbe0dd8b505692bd17cf5327\",\"seal_algorithm\":\"SHA-256\",\"seal_field_handling\":\"seal_hash_absent\",\"affirmation_record_covered\":true},\"chain\":{\"sequence\":0,\"previous_link\":null},\"signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.2.0 organisation_seal\",\"sealed_at\":\"2026-09-25T11:30:00Z\",\"value_b64\":\"8CSqH4frWRezuQTtiTHxh7epedGuD11NgGWsuJVFh9Xm6NCnmUS9r92EF3+LUkbQBfW+gt0KpwleoTKk+Kf5DQ==\"}},{\"decision_id\":\"DR-2099-002\",\"record_type\":\"decision\",\"covered_representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"covered_bytes_b64\":\"eyJkZWNpc2lvbl9pZCI6IkRSLTIwOTktMDAyIiwiY2hhcnRlcl9pZCI6IkNILUVYQU1QTEUtMSIsInJlY29yZF9zdGF0ZSI6ImRyYWZ0ZWQiLCJkaXNwYXRjaF9tb2RlIjoibW9kZS0xIiwiY3JlYXRlZF9hdCI6IjIwMjYtMDktMjZUMDk6MDA6MDBaIiwiYWx0aXR1ZGUiOiJleGVjdXRpdmUiLCJkZWNpc2lvbl9zdGF0ZW1lbnQiOiJBZG9wdCBvcHRpb24gQyBpbnN0ZWFkIG9mIG9wdGlvbiBCLiIsInN1cGVyc2VkZXMiOiJEUi0yMDk5LTAwMSIsImFmZmlybWF0aW9uX3JlY29yZCI6eyJ0aW1lc3RhbXAiOiIyMDI2LTA5LTI2VDEwOjAwOjAwWiIsImFjdG9yX2lkZW50aXR5Ijoib3duZXItZXhhbXBsZS0xIiwibWV0aG9kIjoiYXBwcm92YWwgdG9rZW4ifSwic2VhbF9hbGdvcml0aG0iOiJTSEEtMjU2In0=\"},\"seal\":{\"seal_hash\":\"b6a1a358237efc55ed8a4495166d471f65feb1697ddfa7fa3cb91dcf61b414a9\",\"seal_algorithm\":\"SHA-256\",\"seal_field_handling\":\"seal_hash_absent\",\"affirmation_record_covered\":true},\"predecessors\":{\"supersedes\":\"DR-2099-001\"},\"chain\":{\"sequence\":1,\"previous_link\":\"57970c502184e893dffafba4158f714663f3ebdfe4a42716e7cd0159362e496e\"},\"signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.2.0 organisation_seal\",\"sealed_at\":\"2026-09-26T10:30:00Z\",\"value_b64\":\"W7jde3TnrpMljkSIcHkIZhfkn1qf+DmFovDIChbYd73KVtDOIDJtN1w825Ip39F1Y6CtgLuBNeGMSAy5oRQNCw==\"}},{\"decision_id\":\"DR-2099-003\",\"record_type\":\"decision\",\"covered_representation\":{\"kind\":\"original_bytes\",\"media_type\":\"application/json\"},\"content\":{\"availability\":\"available\",\"covered_bytes_b64\":\"eyJkZWNpc2lvbl9pZCI6IkRSLTIwOTktMDAzIiwiY2hhcnRlcl9pZCI6IkNILUVYQU1QTEUtMSIsInJlY29yZF90eXBlIjoiZGVjaXNpb24iLCJyZWNvcmRfc3RhdGUiOiJkcmFmdGVkIiwiZGlzcGF0Y2hfbW9kZSI6Im1vZGUtMSIsImNyZWF0ZWRfYXQiOiIyMDI2LTA5LTI3VDA5OjAwOjAwWiIsImFsdGl0dWRlIjoiZXhlY3V0aXZlIiwiZGVjaXNpb25fc3RhdGVtZW50IjoiUmV2aWV3IHRoZSBleGFtcGxlIHZlbmRvciBhZ2FpbiBpbiBzaXggbW9udGhzLiIsImFmZmlybWF0aW9uX3JlY29yZCI6eyJ0aW1lc3RhbXAiOiIyMDI2LTA5LTI3VDEwOjAwOjAwWiIsImFjdG9yX2lkZW50aXR5Ijoib3duZXItZXhhbXBsZS0xIiwibWV0aG9kIjoiYXBwcm92YWwgdG9rZW4ifSwic2VhbF9hbGdvcml0aG0iOiJTSEEtMjU2Iiwic2VhbF9oYXNoIjoiMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMCJ9\"},\"seal\":{\"seal_hash\":\"b338d5e167236a058d3222ea8634b394765a71b5a04d5ab65bf4751f4696a125\",\"seal_algorithm\":\"SHA-256\",\"seal_field_handling\":\"seal_hash_zeroed\",\"affirmation_record_covered\":true},\"chain\":{\"sequence\":2,\"previous_link\":\"137c82021e36073e9a1d48c93dcc04d5ace7860df5ce60192f03387c5d0de8c7\"},\"signature\":{\"algorithm\":\"Ed25519\",\"key_ref\":\"org-seal-1\",\"signed_bytes_ref\":\"dps-signatures 0.2.0 organisation_seal\",\"sealed_at\":\"2026-09-27T10:30:00Z\",\"value_b64\":\"Pn4x//LNaSNcDBckhlekqtfJNrcZAq+BIcFqxoN9JO6WFbr+8u56jCSQSfQGroB5nrWRgBxpM0LJdqxpPUMSCw==\"}}]}",
+      "differs_at": "/entries/0/decision_id",
+      "first_member": "DR-2099-042",
+      "last_member": "DR-2099-001",
+      "sealed_digest": "01da2dc8e0978aa300de3d619981b7b23016a57d0c6c6282a5b2d24ec0b4ed80"
     }
   },
   "tokens": {

@@ -549,6 +549,32 @@ def vector_case(c, v):
             bad.append("the last-member and first-member readings")
         if sha256(raw) != v["records"][c["record"]]["digest"]:
             bad.append("the digest")
+    elif kind == "export_duplicate_member":
+        # The export itself naming a member twice, held as text and sealed as a reader keeping the last member reads
+        # it: not read under this extension; a reader keeping the last member and one keeping the first read two
+        # different exports, and one seal over the bytes verifies for both, which is what the rule prevents.
+        t = v["texts"][c["text"]]
+        raw = t["export_text"].encode("utf-8")
+        try:
+            strict_json(raw)
+            bad.append("read a document that names a member twice")
+        except ValueError:
+            pass
+        last = json.loads(raw)  # json.loads keeps the last member
+        first = json.loads(raw, object_pairs_hook=lambda items: dict(reversed(items)))  # keeps the first member
+        if (sig.pointer_get(last, t["differs_at"]), sig.pointer_get(first, t["differs_at"])) != (t["last_member"],
+                                                                                                t["first_member"]):
+            bad.append("the last-member and first-member readings")
+        if last != v["exports"][c["export"]]:
+            bad.append("the last-member reading is not the signed export")
+        seal = v["export_seals"][c["seal"]]["assertion"]
+        if sha256(raw) != t["sealed_digest"] or seal["sealed"]["digest"] != t["sealed_digest"]:
+            bad.append("the sealed digest over the text's bytes")
+        policy_result = sig.check_policy(v["trust_policy"])
+        r, _, _ = sig.checked_signature(seal, sig.seal_signed_bytes, v["trust_policy"], policy_result, "organisation",
+                                        sig.SEAL_SUITES)
+        if r["status"] != "verified":
+            bad.append("the seal over the text")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json is not what generate_vectors.py writes")
