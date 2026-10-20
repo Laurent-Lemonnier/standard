@@ -151,11 +151,11 @@ JSON Schema cannot compare two documents, so a reader holding both the report an
 
 This extension reuses, by reference: anchoring 0.2.0's signed-bytes rule, key states, trust policy and timestamp assertion; portable verification's export, covered bytes and seal field handling (items 2 to 5 of its export rules); and action binding's outcome and review stages and its `issuer_signature` member. A record exported under portable verification, its action-binding attachment and its signatures attachment are checked side by side, each under its own extension, against one trust policy. Using signatures requires using anchoring's checks only for a compromised key's revocation, and portable verification only for a person's affirmation or a record's seal read from an export.
 
-Items 2 to 5 of portable verification's export rules are the same in 0.1.0 and 0.2.0, so an export labelled either is read the same by this extension, and a seal over either verifies; this text names 0.2.0 since #51, in which the fixture exports in `tests/vectors.json` were relabelled `0.2.0`, so that `seal_export` and the digests after it moved with them. No rule of this extension changed with it.
+Items 2 to 5 of portable verification's export rules are the same in 0.1.0 and 0.2.0, so an export labelled either is read the same by this extension, and a seal over either verifies; this text names 0.2.0 since #53, in which the fixture exports in `tests/vectors.json` were relabelled `0.2.0`, so that `seal_export` and the digests after it moved with them. No rule of this extension changed with it.
 
 Not in this version, and future work:
 
-- Action binding 0.3.0, in which the attachment's `issuer_signature` moves from SHOULD to MUST, referring to this profile for the suite and the signed bytes, and carries the seal's fields (`sealed_at` among them) as a copy, as portable verification 0.2.0's entry `signature` does since #51.
+- Action binding 0.3.0, in which the attachment's `issuer_signature` moves from SHOULD to MUST, referring to this profile for the suite and the signed bytes, and carries the seal's fields (`sealed_at` among them) as a copy, as portable verification 0.2.0's entry `signature` does since #53.
 - Other suites for the person's signature and the organisation's seal: RSA, with RFC 9500's published test keys as the time-stamp tokens already use, and other WebAuthn algorithms.
 
 ## Dependencies

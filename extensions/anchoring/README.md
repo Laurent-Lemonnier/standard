@@ -165,11 +165,11 @@ JSON Schema cannot compare two documents, so a reader holding both the report an
 
 This extension reuses, by reference, portable verification's export and covered bytes (items 2 to 5 of its export rules), its chain rule, and its checkpoint shape. A portable verification export is anchored without changing it: the attachment sits beside it. Portable verification says that a missing tail can be detected only against a checkpoint established independently of the export, and that an issuer's timestamp is not independently trusted time. An independent checkpoint and an independent timestamp, as defined here, are what those sentences need. Using anchoring requires using portable verification only for checkpoints and links; a record's seal can be timestamped on its own.
 
-Items 2 to 5 of portable verification's export rules are the same in 0.1.0 and 0.2.0, so an export labelled either is read the same by this extension; this text names 0.2.0 since #51, in which the fixture exports in `tests/vectors.json` were relabelled `0.2.0`. No rule of this extension changed with it.
+Items 2 to 5 of portable verification's export rules are the same in 0.1.0 and 0.2.0, so an export labelled either is read the same by this extension; this text names 0.2.0 since #53, in which the fixture exports in `tests/vectors.json` were relabelled `0.2.0`. No rule of this extension changed with it.
 
 Not in this version, and future work:
 
-- Action binding 0.3.0, in which the attachment's `issuer_signature` moves from SHOULD to MUST, referring to the signatures profile for the suite and the signed bytes, as portable verification 0.2.0 did for a signed entry (#51).
+- Action binding 0.3.0, in which the attachment's `issuer_signature` moves from SHOULD to MUST, referring to the signatures profile for the suite and the signed bytes, as portable verification 0.2.0 did for a signed entry (#53).
 - A witness-signed checkpoint delivered beside the export, as its own dimension: the prefix it fixes verified, and its freshness reported as not established, since the issuer chose which checkpoint to carry. It is not independent in this version.
 
 ## Dependencies
