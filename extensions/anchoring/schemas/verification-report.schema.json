@@ -184,8 +184,8 @@
       "properties": {
         "checkpoint_index": {"type": "integer", "minimum": 0},
         "obtained_from": {
-          "enum": ["configured_source", "same_export"],
-          "description": "configured_source: obtained by the verifier, outside the export, from a source its trust policy configures. same_export: found in the export, so never independent."
+          "enum": ["configured_source", "same_export", "beside_export"],
+          "description": "configured_source: obtained by the verifier, outside the export, from a source its trust policy configures. same_export: found in the export, so never independent. beside_export: carried in the anchoring attachment beside the export, so never independent either; its prefix is reported on its own."
         },
         "source_ref": {"$ref": "#/$defs/ref", "description": "The configured source it came from."},
         "status": {"$ref": "#/$defs/status", "description": "The checkpoint as an independent checkpoint: verified only when independence, signature and key_state are verified."},
@@ -231,9 +231,50 @@
           "then": {"required": ["covered_count", "not_covered_indexes"]},
           "else": {"not": {"anyOf": [{"required": ["covered_count"]}, {"required": ["not_covered_indexes"]}]}}
         },
+        "prefix": {
+          "description": "A checkpoint beside the export only: the export's first count entries against it, compared once its signature and key state are verified. Verified, it shows that those entries are the ones a witness the verifier trusts signed for, at the time time_basis names. It does not show that no later entry was dropped, that the issuer showed the same chain to everyone, or that the witness refused to sign another history.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"$ref": "#/$defs/status"},
+            "covered_count": {"type": "integer", "minimum": 1},
+            "not_covered_indexes": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
+            "time_basis": {"enum": ["stated_time", "independent_timestamp"], "description": "stated_time: the witness's checkpoint_time. independent_timestamp: a verified timestamp over the checkpoint's signature value."},
+            "time": {"$ref": "#/$defs/instant"},
+            "timestamp_index": {"type": "integer", "minimum": 0},
+            "findings": {"$ref": "#/$defs/findings"}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+              "then": {"required": ["covered_count", "not_covered_indexes", "time_basis", "time"]},
+              "else": {"not": {"anyOf": [{"required": ["covered_count"]}, {"required": ["not_covered_indexes"]}]}}
+            },
+            {
+              "if": {"properties": {"time_basis": {"const": "independent_timestamp"}}, "required": ["time_basis"]},
+              "then": {"required": ["timestamp_index"]},
+              "else": {"not": {"required": ["timestamp_index"]}}
+            }
+          ]
+        },
+        "freshness": {"const": "not_established", "description": "A checkpoint beside the export only: always not_established, since the issuer chose which checkpoint to carry."},
         "findings": {"$ref": "#/$defs/findings"}
       },
       "allOf": [
+        {
+          "description": "A checkpoint beside the export is never independent: its status and independence fail, it is not compared under comparison, and its prefix and freshness are reported. Only it has them.",
+          "if": {"properties": {"obtained_from": {"const": "beside_export"}}, "required": ["obtained_from"]},
+          "then": {
+            "required": ["prefix", "freshness"],
+            "properties": {
+              "status": {"const": "failed"},
+              "independence": {"properties": {"status": {"const": "failed"}}},
+              "comparison": {"properties": {"status": {"const": "not_checked"}}}
+            }
+          },
+          "else": {"not": {"anyOf": [{"required": ["prefix"]}, {"required": ["freshness"]}]}}
+        },
         {
           "if": {"properties": {"obtained_from": {"const": "configured_source"}}, "required": ["obtained_from"]},
           "then": {"required": ["source_ref"]}

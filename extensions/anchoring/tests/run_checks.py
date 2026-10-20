@@ -641,9 +641,13 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
     policy_result = check_policy(policy)
     is_refused = policy_result["status"] != "verified"
     source = next((s for s in policy["checkpoint_sources"] if s["source_ref"] == obtained.get("source_ref")), None)
+    beside = where == "beside_export"
     if where == "same_export":
         independence = {"status": "failed", "findings": ["found in the export: a checkpoint from the same export is "
                                                          "never independent"]}
+    elif beside:
+        independence = {"status": "failed", "findings": ["carried beside the export: the issuer chose which "
+                                                         "checkpoint to carry, so it is never independent"]}
     elif is_refused:
         independence = refused(policy_result, "the source")
     elif source is None:
@@ -675,8 +679,15 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         s = cp["signature"]
         signature = {"key_ref": s["key_ref"]}
         key = keys.get(s["key_ref"])
+        # Beside the export, the key must be a witness key listed for a source the policy configures for the chain
+        # the verifier checks: taken from its own configuration, never from the checkpoint's chain_id.
+        listed_for_chain = {r for src in policy["checkpoint_sources"] if src["kind"] == "witness"
+                            and chain_id in src["chain_ids"] for r in src.get("key_refs", [])}
         if key is None:
             signature.update(status="failed", findings=[f"{s['key_ref']} is not a key in the trust policy"])
+        elif beside and s["key_ref"] not in listed_for_chain:
+            signature.update(status="failed", findings=[f"the trust policy lists {s['key_ref']} for no witness source "
+                                                        f"it configures for {chain_id}"])
         elif source is not None and s["key_ref"] not in source.get("key_refs", []):
             signature.update(status="failed", findings=[f"the trust policy does not list {s['key_ref']} for "
                                                         f"{source['source_ref']}"])
@@ -711,7 +722,25 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         out["key_state"] = {"status": "not_checked"}
 
     out["status"] = combine(independence["status"], signature["status"], out["key_state"]["status"])
-    if out["status"] != "verified":
+    if beside:
+        out["comparison"] = {"status": "not_checked", "findings": ["compared only with a verified independent "
+                                                                   "checkpoint; the prefix is reported apart"]}
+        ks = out["key_state"]
+        if signature["status"] != "verified" or ks["status"] != "verified":
+            out["prefix"] = {"status": "not_checked", "findings": ["the checkpoint's signature or the key's state "
+                                                                   "when it signed is not verified"]}
+        elif cp["chain_id"] != chain_id:
+            out["prefix"] = {"status": "not_checked", "findings": [f"the checkpoint is for {cp['chain_id']}; the "
+                                                                   f"verifier checks {chain_id}"]}
+        else:
+            prefix = compare(export, cp)
+            if prefix["status"] == "verified":
+                prefix.update(time_basis=ks["time_basis"], time=ks["time"])
+                if "timestamp_index" in ks:
+                    prefix["timestamp_index"] = ks["timestamp_index"]
+            out["prefix"] = prefix
+        out["freshness"] = "not_established"
+    elif out["status"] != "verified":
         out["comparison"] = {"status": "not_checked", "findings": ["compared only with a verified independent "
                                                                    "checkpoint"]}
     elif cp["chain_id"] != chain_id:
@@ -724,13 +753,37 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
 
 # ---------------------------------------------------------------- a report read with its documents
 
+def all_obtained(ctx):
+    """The checkpoints the verifier obtained from its sources, then those carried beside the export, in that order."""
+    beside = [{"checkpoint": cp, "obtained_from": "beside_export"}
+              for cp in (ctx["attachment"] or {}).get("checkpoints", [])]
+    return list(ctx["obtained"]) + beside
+
+
+def with_conflicts(obtained, results):
+    """Two checkpoints of one chain and count, each with its signature and key state verified, that fix different last
+    links cannot both hold: a witness signed two histories, or the chain was forked. Each is reported as it is, with a
+    finding that names both and their keys. Wherever they came from."""
+    good = [(i, o["checkpoint"]) for i, (o, r) in enumerate(zip(obtained, results))
+            if o.get("checkpoint") and r["signature"]["status"] == "verified" and r["key_state"]["status"] == "verified"]
+    for a, (i, x) in enumerate(good):
+        for j, y in good[a + 1:]:
+            if (x["chain_id"], x["count"]) == (y["chain_id"], y["count"]) and x["head_link"] != y["head_link"]:
+                finding = (f"checkpoints {i} ({x['signature']['key_ref']}) and {j} ({y['signature']['key_ref']}) fix "
+                           f"{x['count']} entries of {x['chain_id']} with different last links: they cannot both hold; "
+                           "a witness signed two histories, or the chain was forked")
+                for k in (i, j):
+                    results[k].setdefault("findings", []).append(finding)
+    return results
+
+
 def run_context(ctx):
-    held = [o["checkpoint"] for o in ctx["obtained"] if o.get("checkpoint") and "signature" in o["checkpoint"]]
+    obtained = all_obtained(ctx)
+    held = [o["checkpoint"] for o in obtained if o.get("checkpoint") and "signature" in o["checkpoint"]]
     ts = (ctx["attachment"] or {}).get("timestamps", [])
     ts_results = [check_timestamp(t, ctx["policy"], ctx["export"], ctx["chain_id"], held) for t in ts]
-    cp_results = [check_checkpoint(o, ctx["policy"], ctx["export"], ctx["chain_id"], ts_results)
-                  for o in ctx["obtained"]]
-    return ts_results, cp_results
+    cp_results = [check_checkpoint(o, ctx["policy"], ctx["export"], ctx["chain_id"], ts_results) for o in obtained]
+    return ts_results, with_conflicts(obtained, cp_results)
 
 
 def not_integers(doc, path=""):
@@ -766,10 +819,11 @@ def read_with_documents(report, ctx):
         problems.append("chain_id is not the chain the documents are read for")
 
     stated = (attachment or {}).get("timestamps", [])
+    obtained = all_obtained(ctx)
     for label, count_key, results, n, key in (("timestamp", "timestamp_count", report["timestamps"], len(stated),
                                                "timestamp_index"),
                                               ("checkpoint", "checkpoint_count", report["checkpoints"],
-                                               len(ctx["obtained"]), "checkpoint_index")):
+                                               len(obtained), "checkpoint_index")):
         if report[count_key] != n:
             problems.append(f"{count_key} is {report[count_key]}; there are {n}")
         indexes = sorted(r[key] for r in results)
@@ -801,7 +855,7 @@ def read_with_documents(report, ctx):
 
     for r in report["checkpoints"]:
         i = r["checkpoint_index"]
-        if not json_integer(i) or i >= len(ctx["obtained"]):
+        if not json_integer(i) or i >= len(obtained):
             continue
         ref = cp_ref[i]
         if (r["obtained_from"], r.get("source_ref")) != (ref["obtained_from"], ref.get("source_ref")):
@@ -823,6 +877,17 @@ def read_with_documents(report, ctx):
         if rc["status"] == refc["status"] == "verified" and (rc["covered_count"], rc["not_covered_indexes"]) != (
                 refc["covered_count"], refc["not_covered_indexes"]):
             problems.append(f"checkpoint {i}: entries covered and not covered not reported as found")
+        rp, refp = r.get("prefix"), ref.get("prefix")
+        if rp is not None and refp is not None:
+            verified_prefix = rp["status"] == "verified"
+            if verified_prefix and refp["status"] != "verified":
+                problems.append(f"checkpoint {i}: prefix reported verified, but the reference check finds "
+                                f"{refp['status']}")
+            elif refp["status"] == "failed" and rp["status"] != "failed":
+                problems.append(f"checkpoint {i}: a prefix that fails not reported as failed")
+            elif verified_prefix and any(rp.get(k) != refp.get(k) for k in (
+                    "covered_count", "not_covered_indexes", "time_basis", "time", "timestamp_index")):
+                problems.append(f"checkpoint {i}: the prefix's entries or its time not reported as found")
     return problems
 
 
@@ -1042,6 +1107,38 @@ def vector_case(c, v):
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")
+    elif kind == "inline_checkpoint":
+        # The attachment schema carries the checkpoint object inline: it must be the checkpoint schema's, member for
+        # member, so that a checkpoint beside the export is the same object as one from a source.
+        att = strict_json(SCHEMAS["attachment"].read_bytes())["$defs"]["checkpoint"]
+        cp = strict_json(SCHEMAS["checkpoint"].read_bytes())
+        if att != {k: cp[k] for k in ("description", "type", "additionalProperties", "required", "properties")}:
+            bad.append("the attachment's checkpoint is not the checkpoint schema's")
+    elif kind == "duplicate_member":
+        # An attachment whose carried checkpoint names a member twice, held as text: not read. A reader keeping the
+        # last member reads a checkpoint whose signature verifies; one keeping the first reads another checkpoint.
+        t = v["texts"][c["text"]]
+        raw = t["attachment_text"].encode("utf-8")
+        try:
+            strict_json(raw)
+            bad.append("read a document that names a member twice")
+        except ValueError:
+            pass
+        last = json.loads(raw)  # json.loads keeps the last member
+        first = json.loads(raw, object_pairs_hook=lambda items: dict(reversed(items)))  # keeps the first member
+        if (pointer_get(last, t["differs_at"]), pointer_get(first, t["differs_at"])) != (t["last_member"],
+                                                                                        t["first_member"]):
+            bad.append("the last-member and first-member readings")
+        public = Ed25519PublicKey.from_public_bytes(bytes.fromhex(v["test_keys"][c["key"]]["public_key_hex"]))
+        for reading, should_verify in ((last, True), (first, False)):
+            cp = reading["checkpoints"][0]
+            try:
+                public.verify(base64.b64decode(cp["signature"]["value_b64"]), checkpoint_signed_bytes(cp))
+                ok = True
+            except InvalidSignature:
+                ok = False
+            if ok != should_verify:
+                bad.append(f"the {'last' if should_verify else 'first'}-member reading's signature")
     else:
         raise ValueError(f"unknown check {kind!r}")
     return ("mismatch" if bad else "match"), ", ".join(bad)
@@ -1123,27 +1220,49 @@ def checkpoint_case(c, v, validators):
         if not c.get("schema_valid", True) and not found:
             raise ValueError("the case says the checkpoint is not schema-valid, but it is")
     timestamps = [timestamp_input(t, v, validators) for t in c.get("timestamps", [])]
-    held = [cp] if cp and "signature" in cp else []
     chain_id = chain_of(c, v)
-    ts_results = [reference(check_timestamp, t, policy, export, chain_id, held) for t in timestamps]
     obtained = {"checkpoint": cp, "obtained_from": c.get("obtained_from", "configured_source")}
     if c.get("source_ref"):
         obtained["source_ref"] = c["source_ref"]
-    r = reference(check_checkpoint, obtained, policy, export, chain_id, ts_results)
+    # Other checkpoints read at the same time (others): from a source or beside the export, by name in vectors.json.
+    others = []
+    for o in c.get("others", []):
+        o = dict(o)
+        o["checkpoint"] = copy.deepcopy(v["checkpoints"][o.pop("checkpoint")]["checkpoint"])
+        others.append(o)
+    all_cps = [obtained] + others
+    held = [o["checkpoint"] for o in all_cps if o["checkpoint"] and "signature" in o["checkpoint"]]
+    ts_results = [reference(check_timestamp, t, policy, export, chain_id, held) for t in timestamps]
+    results = [reference(check_checkpoint, o, policy, export, chain_id, ts_results) for o in all_cps]
+    r = with_conflicts(all_cps, results)[0]
     summary = {d: (r[d] if d == "status" else r[d]["status"]) for d in CHECKPOINT_DIMENSIONS}
     if r["key_state"]["status"] == "verified":
         summary["time_basis"] = r["key_state"]["time_basis"]
     for k in ("covered_count", "not_covered_indexes"):
         if k in c["expected"]:
             summary[k] = r["comparison"].get(k)
+    if "prefix" in r:
+        summary["prefix"], summary["freshness"] = r["prefix"]["status"], r["freshness"]
+        for k in ("covered_count", "not_covered_indexes", "time_basis", "time"):
+            if f"prefix_{k}" in c["expected"]:
+                summary[f"prefix_{k}"] = r["prefix"].get(k)
+    if "conflict" in c["expected"]:
+        summary["conflict"] = any("cannot both hold" in f for f in r.get("findings", []))
     detail = [f"{d}: {f}" for d in CHECKPOINT_DIMENSIONS[1:] for f in r[d].get("findings", [])] + r.get("findings", [])
+    if "prefix" in r:
+        detail += [f"prefix: {f}" for f in r["prefix"].get("findings", [])]
     return summary, "; ".join(detail)
 
 
 def expected_checkpoint(c):
-    """Every dimension is expected verified, on the stated time, unless the case says otherwise."""
+    """Every dimension is expected verified, on the stated time, unless the case says otherwise. A checkpoint beside
+    the export is expected failed as an independent checkpoint (independence failed, comparison not checked), its
+    prefix verified and its freshness not established, unless the case says otherwise."""
     full = {d: "verified" for d in CHECKPOINT_DIMENSIONS}
     full["time_basis"] = "stated_time"
+    if c.get("obtained_from") == "beside_export":
+        full.update(status="failed", independence="failed", comparison="not_checked", prefix="verified",
+                    freshness="not_established")
     full.update(c["expected"])
     if full["key_state"] != "verified":
         full.pop("time_basis", None)
@@ -1177,15 +1296,16 @@ def pairing_case(c, v, validators):
 
 def main():
     sys.stdout.reconfigure(errors="backslashreplace")  # some cases hold text with no UTF-8 encoding, on purpose
-    cases = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
-    v = json.loads((HERE / "vectors.json").read_text(encoding="utf-8"))
+    # Every document this check reads, its fixtures and schemas included, is read with duplicate members rejected.
+    cases = strict_json((HERE / "cases.json").read_bytes())
+    v = strict_json((HERE / "vectors.json").read_bytes())
     validators = {}
     for name, p in SCHEMAS.items():
-        schema = json.loads(p.read_text(encoding="utf-8"))
+        schema = strict_json(p.read_bytes())
         Draft202012Validator.check_schema(schema)
         validators[name] = Draft202012Validator(schema)
         print(f"[ok  ] schemas/{p.name}: valid JSON Schema 2020-12")
-    validators["pv_export"] = Draft202012Validator(json.loads(PV_EXPORT_SCHEMA.read_text(encoding="utf-8")))
+    validators["pv_export"] = Draft202012Validator(strict_json(PV_EXPORT_SCHEMA.read_bytes()))
 
     same = lambda c: c["expected"]  # noqa: E731
     groups = [

@@ -3,7 +3,7 @@
   "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.2.0/anchoring-attachment.schema.json",
   "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.2.0. Binds only an implementation that says it uses this extension.",
   "title": "Anchoring attachment",
-  "description": "Independent timestamps over exact bytes of an export, and references to the sources that keep checkpoints of its chain. The attachment sits beside the export: it never adds a field to a record or to the export. It carries references only: never a time-stamping authority's certificate or key, a witness key, or a checkpoint, since a verifier takes every source of trust from its own trust policy.",
+  "description": "Independent timestamps over exact bytes of an export, references to the sources that keep checkpoints of its chain, and witness-signed checkpoints carried beside the export. The attachment sits beside the export: it never adds a field to a record or to the export. It never carries a time-stamping authority's certificate or key or a witness key, since a verifier takes every source of trust from its own trust policy; a checkpoint it carries is never independent and never a source of trust.",
   "type": "object",
   "additionalProperties": false,
   "required": ["profile", "profile_version"],
@@ -16,7 +16,13 @@
       "description": "The issuer's identifier of the chain the export's entries belong to. A reference: the verifier takes the chain it checks from its own configuration."
     },
     "timestamps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/timestamp"}},
-    "checkpoint_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/checkpoint_ref"}}
+    "checkpoint_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/checkpoint_ref"}},
+    "checkpoints": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/checkpoint"},
+      "description": "Witness-signed checkpoints of the export's chain, carried beside the export. Each is reported on its own dimension (prefix) and is never independent: the issuer chose which to carry. A carried checkpoint is never a source of trust; the witness key comes from the verifier's policy."
+    }
   },
   "$defs": {
     "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
@@ -143,6 +149,7 @@
         "source_ref": {"$ref": "#/$defs/ref"},
         "chain_id": {"$ref": "#/$defs/chain_id"}
       }
-    }
+    },
+    "checkpoint": {"description": "A chain fixed at one point (its identifier, count, head link and time), signed by a witness under the shared signed-bytes rule with assertion type checkpoint. It is independent only when the verifier obtains it from a source it configured, outside the export; a copy found in the export is never independent. The witness sees digests only.", "type": "object", "additionalProperties": false, "required": ["profile", "profile_version", "assertion", "chain_id", "count", "head_link", "checkpoint_time", "signature"], "properties": {"profile": {"const": "dps-anchoring"}, "profile_version": {"const": "0.2.0"}, "assertion": {"const": "checkpoint"}, "chain_id": {"type": "string", "minLength": 1, "maxLength": 256}, "count": {"type": "integer", "minimum": 1, "maximum": 9007199254740991, "description": "The number of entries the checkpoint fixes: link(count - 1) is the head link. Written as a JSON integer (digits only, with no fraction or exponent), and at most 2^53 - 1: JSON readers agree exactly on every integer up to that (RFC 8259 section 6). JSON Schema also accepts 3.0 as an integer; a verifier reports a count written so as failed."}, "head_link": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "link(count - 1), as portable verification defines the chain, in lowercase hex."}, "checkpoint_time": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", "description": "The time the witness states, in UTC, to the second, in exactly this form, because it is signed as text. It is a real UTC time: a date that exists, with no leap second. The pattern cannot reject every date that does not exist, so a verifier reports such a time as failed. It is the witness's statement, not independent time."}, "signature": {"type": "object", "additionalProperties": false, "required": ["algorithm", "key_ref", "value_b64"], "properties": {"algorithm": {"type": "string", "minLength": 1, "description": "Ed25519 in 0.2.0."}, "key_ref": {"type": "string", "minLength": 1, "maxLength": 256, "description": "The witness key's reference. The key comes from the verifier's trust policy, never from the checkpoint."}, "value_b64": {"type": "string", "minLength": 4, "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$", "description": "The signature over the signed bytes (fields in the order of the shared rule for a checkpoint), in padded base64."}}}}}
   }
 }
