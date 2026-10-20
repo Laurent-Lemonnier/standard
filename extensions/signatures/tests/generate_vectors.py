@@ -307,7 +307,8 @@ def export_entry(name, seal, sequence, previous_link):
 
 
 def build_exports(seal):
-    """Portable verification 0.1.0 exports: full (R0, R1, R2, as anchoring's) and extended (R4 added)."""
+    """Portable verification 0.2.0 exports, their entries unsigned: full (R0, R1, R2, as anchoring's) and extended (R4
+    added)."""
     links, head = [], None
     for k in RECORD_ORDER:
         head = link(head, seal[k])
@@ -315,7 +316,7 @@ def build_exports(seal):
     chained = {"R0": (0, None), "R1": (1, links[0]), "R2": (2, links[1]), "R4": (3, links[2])}
 
     def export(names):
-        return {"profile": "dps-portable-verification", "profile_version": "0.1.0",
+        return {"profile": "dps-portable-verification", "profile_version": "0.2.0",
                 "entries": [export_entry(n, seal, *chained[n]) for n in names]}
 
     return {"full": export(["R0", "R1", "R2"]), "extended": export(["R0", "R1", "R2", "R4"])}, links
@@ -551,7 +552,7 @@ def build():
     dup_entry = export_entry("R0", seal, 0, None)
     dup_entry["content"]["covered_bytes_b64"] = b64(r0_dup.encode("utf-8"))
     dup_entry["seal"]["seal_hash"] = seal_dup
-    exports["duplicate_actor"] = {"profile": "dps-portable-verification", "profile_version": "0.1.0",
+    exports["duplicate_actor"] = {"profile": "dps-portable-verification", "profile_version": "0.2.0",
                                   "entries": [dup_entry]}
     if exports["full"] != anchoring["exports"]["full"] or exports["extended"] != anchoring["exports"]["extended"]:
         raise ValueError("the exports no longer match the anchoring fixtures")

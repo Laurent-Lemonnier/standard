@@ -142,6 +142,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r tools/requirements.txt
+      - run: pip install -r extensions/portable-verification/tests/requirements.txt
       - run: python extensions/portable-verification/tests/run_checks.py
 
   action-binding:

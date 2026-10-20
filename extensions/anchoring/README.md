@@ -5,7 +5,7 @@
 | Extension | Anchoring |
 | Version | 0.2.0 |
 | Status | Proposal. Not part of the Standard. |
-| Written against | Core v1.3, reading edition rev. 11 (tag `v1.3-rev11`), with reference files 5.2.0 (tag `ref-5.2.0`), and portable verification 0.1.0 |
+| Written against | Core v1.3, reading edition rev. 11 (tag `v1.3-rev11`), with reference files 5.2.0 (tag `ref-5.2.0`), and portable verification 0.2.0 |
 | Licences | This text: CC BY 4.0 ([LICENSE](../../LICENSE)). The schemas (`schemas/`) and the tests (`tests/`): Apache-2.0 ([LICENSES/Apache-2.0.txt](../../LICENSES/Apache-2.0.txt)) |
 
 This extension says how to anchor sealed decision records with evidence from outside the issuer, and how a check of that evidence reports what it found. It defines two assertions: an independent timestamp, which shows that exact bytes existed by a time, and an independent checkpoint, which fixes a chain of records at one point. Each is an object beside the export or the records. Neither adds a field to a decision record, and neither stands for the other.
@@ -29,8 +29,8 @@ Version 0.2.0 changes 0.1.0 after review, and 0.1.0 documents are no longer vali
 | `seal_hash` | Core §5.1(3), §6.2 | The 32 bytes a timestamp may cover |
 | `affirmation_record.timestamp` | Core §5.1(3), §6.2 | The issuer's time, compared with an independent timestamp. It stays the issuer's statement |
 | `decision_id` | Core §6.2.1 | Which record a seal belongs to |
-| The export, its entries and their covered bytes | Portable verification 0.1.0, "The export" | Where the seals and the issuer's times are read |
-| The chain, `link(i)`, the count and the last link | Portable verification 0.1.0, "Chains, checkpoints and time" | What a timestamp over a link covers, and what a checkpoint fixes |
+| The export, its entries and their covered bytes | Portable verification 0.2.0, "The export" | Where the seals and the issuer's times are read |
+| The chain, `link(i)`, the count and the last link | Portable verification 0.2.0, "Chains, checkpoints and time" | What a timestamp over a link covers, and what a checkpoint fixes |
 
 The attachment and the report refer to records by their seals and their links. They are never inserted into one.
 
@@ -165,9 +165,11 @@ JSON Schema cannot compare two documents, so a reader holding both the report an
 
 This extension reuses, by reference, portable verification's export and covered bytes (items 2 to 5 of its export rules), its chain rule, and its checkpoint shape. A portable verification export is anchored without changing it: the attachment sits beside it. Portable verification says that a missing tail can be detected only against a checkpoint established independently of the export, and that an issuer's timestamp is not independently trusted time. An independent checkpoint and an independent timestamp, as defined here, are what those sentences need. Using anchoring requires using portable verification only for checkpoints and links; a record's seal can be timestamped on its own.
 
+Items 2 to 5 of portable verification's export rules are the same in 0.1.0 and 0.2.0, so an export labelled either is read the same by this extension; this text names 0.2.0 since #53, in which the fixture exports in `tests/vectors.json` were relabelled `0.2.0`. No rule of this extension changed with it.
+
 Not in this version, and future work:
 
-- Portable verification 0.2.0 and action binding 0.3.0, in which the signature of a signed entry or attachment moves from SHOULD to MUST, referring to these profiles for the suite and the signed bytes.
+- Action binding 0.3.0, in which the attachment's `issuer_signature` moves from SHOULD to MUST, referring to the signatures profile for the suite and the signed bytes, as portable verification 0.2.0 did for a signed entry (#53).
 - A witness-signed checkpoint delivered beside the export, as its own dimension: the prefix it fixes verified, and its freshness reported as not established, since the issuer chose which checkpoint to carry. It is not independent in this version.
 
 ## Dependencies
