@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.2.0/checkpoint.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.2.0. Binds only an implementation that says it uses this extension.",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.3.0. Binds only an implementation that says it uses this extension.",
   "title": "Witness-signed checkpoint",
   "description": "A chain fixed at one point (its identifier, count, head link and time), signed by a witness under the shared signed-bytes rule with assertion type checkpoint. It is independent only when the verifier obtains it from a source it configured, outside the export; a copy found in the export is never independent. The witness sees digests only.",
   "type": "object",

@@ -128,13 +128,13 @@
     {"id": "P46", "description": "a verified prefix that does not say what its time rests on", "schema": "report", "base": "/base_report", "patch": [{"insert": "/checkpoints/3", "vector": "/beside_results/cp_a"}, {"set": "/checkpoint_count", "value": 4}, {"remove": "/checkpoints/3/prefix/time_basis"}], "expected": "fail"},
     {"id": "P47", "description": "a verified prefix resting on a timestamp it does not name", "schema": "report", "base": "/base_report", "patch": [{"insert": "/checkpoints/3", "vector": "/beside_results/cp_a"}, {"set": "/checkpoint_count", "value": 4}, {"set": "/checkpoints/3/prefix/time_basis", "value": "independent_timestamp"}], "expected": "fail"},
     {"id": "P48", "description": "a prefix that failed, still naming the entries it covers", "schema": "report", "base": "/base_report", "patch": [{"insert": "/checkpoints/3", "vector": "/beside_results/cp_a"}, {"set": "/checkpoint_count", "value": 4}, {"set": "/checkpoints/3/prefix/status", "value": "failed"}], "expected": "fail"},
-    {"id": "X01", "description": "the fixture export full is a valid portable verification 0.2.0 export", "schema": "pv_export", "base": "/exports/full", "patch": [], "expected": "pass"},
-    {"id": "X02", "description": "the fixture export tail_dropped is a valid portable verification 0.2.0 export", "schema": "pv_export", "base": "/exports/tail_dropped", "patch": [], "expected": "pass"},
-    {"id": "X03", "description": "the fixture export middle_dropped is a valid portable verification 0.2.0 export", "schema": "pv_export", "base": "/exports/middle_dropped", "patch": [], "expected": "pass"},
-    {"id": "X04", "description": "the fixture export reordered is a valid portable verification 0.2.0 export", "schema": "pv_export", "base": "/exports/reordered", "patch": [], "expected": "pass"},
-    {"id": "X05", "description": "the fixture export rewritten is a valid portable verification 0.2.0 export", "schema": "pv_export", "base": "/exports/rewritten", "patch": [], "expected": "pass"},
-    {"id": "X06", "description": "the fixture export extended is a valid portable verification 0.2.0 export", "schema": "pv_export", "base": "/exports/extended", "patch": [], "expected": "pass"},
-    {"id": "X07", "description": "the fixture export tail_dropped_with_issuer_checkpoint is a valid portable verification 0.2.0 export", "schema": "pv_export", "base": "/exports/tail_dropped_with_issuer_checkpoint", "patch": [], "expected": "pass"}
+    {"id": "X01", "description": "the fixture export full is a valid portable verification 0.3.0 export", "schema": "pv_export", "base": "/exports/full", "patch": [], "expected": "pass"},
+    {"id": "X02", "description": "the fixture export tail_dropped is a valid portable verification 0.3.0 export", "schema": "pv_export", "base": "/exports/tail_dropped", "patch": [], "expected": "pass"},
+    {"id": "X03", "description": "the fixture export middle_dropped is a valid portable verification 0.3.0 export", "schema": "pv_export", "base": "/exports/middle_dropped", "patch": [], "expected": "pass"},
+    {"id": "X04", "description": "the fixture export reordered is a valid portable verification 0.3.0 export", "schema": "pv_export", "base": "/exports/reordered", "patch": [], "expected": "pass"},
+    {"id": "X05", "description": "the fixture export rewritten is a valid portable verification 0.3.0 export", "schema": "pv_export", "base": "/exports/rewritten", "patch": [], "expected": "pass"},
+    {"id": "X06", "description": "the fixture export extended is a valid portable verification 0.3.0 export", "schema": "pv_export", "base": "/exports/extended", "patch": [], "expected": "pass"},
+    {"id": "X07", "description": "the fixture export tail_dropped_with_issuer_checkpoint is a valid portable verification 0.3.0 export", "schema": "pv_export", "base": "/exports/tail_dropped_with_issuer_checkpoint", "patch": [], "expected": "pass"}
   ],
   "vector_cases": [
     {"id": "V01", "description": "SHA-256 known value for 'abc' (FIPS 180-2)", "check": "known_vector", "text": "abc", "digest": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "expected": "match"},

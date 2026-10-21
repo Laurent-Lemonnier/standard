@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://decisionprovenancestandard.org/extensions/anchoring/0.2.0/anchoring-attachment.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.2.0. Binds only an implementation that says it uses this extension.",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Anchoring extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, and portable verification 0.3.0. Binds only an implementation that says it uses this extension.",
   "title": "Anchoring attachment",
   "description": "Independent timestamps over exact bytes of an export, references to the sources that keep checkpoints of its chain, and witness-signed checkpoints carried beside the export. The attachment sits beside the export: it never adds a field to a record or to the export. It never carries a time-stamping authority's certificate or key or a witness key, since a verifier takes every source of trust from its own trust policy; a checkpoint it carries is never independent and never a source of trust.",
   "type": "object",

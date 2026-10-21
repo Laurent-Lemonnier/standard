@@ -47,7 +47,7 @@ OTHER_SCHEMAS = {
     "sig_attachment": ROOT / "extensions" / "signatures" / "schemas" / "signatures-attachment.schema.json",
 }
 SIGNATURES_RUNNER = ROOT / "extensions" / "signatures" / "tests" / "run_checks.py"
-PROFILE, VERSION = "dps-portable-verification", "0.2.0"
+PROFILE, VERSION = "dps-portable-verification", "0.3.0"
 SIGNATURES_PROFILE, SIGNATURES_VERSION = "dps-signatures", "0.2.0"
 SIGNED_BYTES_REF = f"{SIGNATURES_PROFILE} {SIGNATURES_VERSION} organisation_seal"
 ZERO_LINK = bytes(32)
@@ -206,14 +206,15 @@ def check_entry_signature(entry, policy, policy_result, ts_results):
 
 
 def time_assurance(entry, signature, ts_results):
-    """Verified only against a verified independent timestamp over the entry's signature value, where that signature
-    verifies on this entry: a timestamp over bytes that are not this entry's signature shows nothing about it."""
+    """Verified only against a verified independent timestamp over the entry's verified signature: the dimension,
+    signature and key state, as action binding 0.3.0 gives an attachment a time. A timestamp over a signature that is
+    not verified, whatever the reason, shows nothing about this entry."""
     if "signature" not in entry:
         return {"status": "not_checked", "basis": "issuer_assertion"}
     if entry["content"]["availability"] != "available":
         return {"status": "not_checked", "basis": "issuer_assertion",
                 "findings": ["the entry's signature is not checked, so no timestamp over it counts"]}
-    if signature.get("key_state", {}).get("status") == "not_checked":  # the signature itself did not verify
+    if signature["status"] != "verified":  # 0.3.0: the dimension, so a failed key state counts too
         return {"status": "not_checked", "basis": "issuer_assertion",
                 "findings": ["the entry's signature is not verified, so a timestamp over its value shows nothing "
                              "about this entry"]}
