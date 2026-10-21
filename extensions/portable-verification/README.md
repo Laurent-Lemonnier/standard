@@ -78,7 +78,7 @@ The verifier also:
 
 - An export MAY chain its entries: `link(i) = SHA-256(link(i-1) || digest(i))` over the 32-byte raw values, with 32 zero bytes before the first entry. `digest(i)` is the entry's seal, or its derived digest. Each entry carries the previous link, and the chain is checked from its first link. The chain binds the seals and their order, not which record each seal belongs to; the statement check covers that.
 - A valid chain shows that the supplied sequence is consistent. It does not show that every event was recorded.
-- A missing tail can be detected only against a checkpoint (the count and the last link) established independently of the export. Without one, a correctly linked prefix passes. A checkpoint supplied in the same export is not independent.
+- A missing tail can be detected only against a checkpoint (the count and the last link) established independently of the export. Without one, a correctly linked prefix passes. A checkpoint supplied in or beside the export is not independent, and never supports `consistent_with_independent_checkpoint`.
 - A report MUST NOT describe a sequence as consistent with a checkpoint without naming that checkpoint. Even a matching checkpoint says nothing about events the issuer never recorded.
 - A timestamp the issuer asserts, including `affirmation_record.timestamp` and `sealed_at`, is not independently trusted time, and the actor it names is not independently verified identity. The report records time or identity as verified only against an independent source it names. This extension has no independent source for identity: an organisation's seal binds no person.
 
