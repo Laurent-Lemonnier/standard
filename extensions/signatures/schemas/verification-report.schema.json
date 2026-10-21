@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://decisionprovenancestandard.org/extensions/signatures/0.2.0/verification-report.schema.json",
-  "$comment": "SPDX-License-Identifier: Apache-2.0. Signatures extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, portable verification 0.2.0, action binding 0.2.0 and 0.3.0, and anchoring 0.2.0. Binds only an implementation that says it uses this extension.",
+  "$comment": "SPDX-License-Identifier: Apache-2.0. Signatures extension 0.2.0 (proposal), written against Core v1.3 rev. 11 and reference files 5.2.0, portable verification 0.3.0, action binding 0.2.0 and 0.3.0, and anchoring 0.2.0. Binds only an implementation that says it uses this extension.",
   "title": "Signatures verification report",
   "description": "What a verifier found for each person's signature, each organisation's seal and each independent timestamp, as separate dimensions, each naming the key reference and the source it was checked against, with the identity dimension apart from the signature check and the scope of its conclusion. There is deliberately no overall result: no assertion stands for another, and nothing here is a legal conclusion or a Conformance Level.",
   "type": "object",
