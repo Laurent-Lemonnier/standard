@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Checks for the portable verification extension, version 0.2.0 (a proposal).
+"""Checks for the portable verification extension, version 0.3.0 (a proposal).
 
 Runs the cases in cases.json over the values in vectors.json, which generate_vectors.py writes:
 

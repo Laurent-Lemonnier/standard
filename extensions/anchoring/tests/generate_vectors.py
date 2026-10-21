@@ -487,8 +487,14 @@ def build():
     cp("cp_b2", "witness-b-2, the successor key", "witness-b-2", CHAIN, 3, "L2", "2026-10-02T12:00:00Z")
     cp("cp_c", "witness-c-1, a key later revoked as compromised", "witness-c-1", CHAIN, 3, "L2",
        "2026-09-27T12:00:00Z")
+    cp("cp_c_time_changed", "cp_c presented with another checkpoint_time, an hour later: a copy whose signature does "
+       "not verify over its fields, held next to cp_c (T63)", "witness-c-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z",
+       presented={"checkpoint_time": "2026-09-27T13:00:00Z"})
     cp("cp_d", "witness-d-1, stated after the key's not_after", "witness-d-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z")
     cp("cp_x", "witness-x-1, a key the policy does not list", "witness-x-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z")
+    cp("cp_x_chain_2", "witness-x-1, correctly signed, for chain 2: with witness-x-1 listed for a source of chain 2 "
+       "only, the key the checkpoint's own chain_id would name (K84)", "witness-x-1", CHAIN_2, 3, "L2",
+       "2026-09-27T12:00:00Z")
     cp("cp_org", "issuer-seal-1, the issuer's own key (role organisation)", "issuer-seal-1", CHAIN, 3, "L2",
        "2026-09-27T12:00:00Z")
     cp("cp_org_as_witness", "the issuer's own key, signing under issuer-witness-1, a second reference a policy may "

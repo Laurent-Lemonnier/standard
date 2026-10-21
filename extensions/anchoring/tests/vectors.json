@@ -1151,6 +1151,26 @@
       },
       "signed_bytes_hex": "4450532d534947000000000d6470732d616e63686f72696e6700000005302e322e300000000a636865636b706f696e740000000b7769746e6573732d632d310000001a75726e3a6578616d706c653a636861696e3a6973737565722d3100000008000000000000000300000020461cf1cad5fe45a896737bb01ae396639da7ef5c424352ab0d029565e022855200000014323032362d30392d32375431323a30303a30305a"
     },
+    "cp_c_time_changed": {
+      "about": "cp_c presented with another checkpoint_time, an hour later: a copy whose signature does not verify over its fields, held next to cp_c (T63)",
+      "signed_with": "witness-c-1",
+      "checkpoint": {
+        "profile": "dps-anchoring",
+        "profile_version": "0.2.0",
+        "assertion": "checkpoint",
+        "chain_id": "urn:example:chain:issuer-1",
+        "count": 3,
+        "head_link": "461cf1cad5fe45a896737bb01ae396639da7ef5c424352ab0d029565e0228552",
+        "checkpoint_time": "2026-09-27T13:00:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "witness-c-1",
+          "value_b64": "AIISxNDRoRTcNax8y69uphVlDDLjoq4+w+Z2llP6mfLSkfKPeWDL5Oq/5XMJxJDp6oL2vYf3UHafhxb6NJE8AA=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000d6470732d616e63686f72696e6700000005302e322e300000000a636865636b706f696e740000000b7769746e6573732d632d310000001a75726e3a6578616d706c653a636861696e3a6973737565722d3100000008000000000000000300000020461cf1cad5fe45a896737bb01ae396639da7ef5c424352ab0d029565e022855200000014323032362d30392d32375431333a30303a30305a",
+      "signature_made_over_hex": "4450532d534947000000000d6470732d616e63686f72696e6700000005302e322e300000000a636865636b706f696e740000000b7769746e6573732d632d310000001a75726e3a6578616d706c653a636861696e3a6973737565722d3100000008000000000000000300000020461cf1cad5fe45a896737bb01ae396639da7ef5c424352ab0d029565e022855200000014323032362d30392d32375431323a30303a30305a"
+    },
     "cp_d": {
       "about": "witness-d-1, stated after the key's not_after",
       "signed_with": "witness-d-1",
@@ -1188,6 +1208,25 @@
         }
       },
       "signed_bytes_hex": "4450532d534947000000000d6470732d616e63686f72696e6700000005302e322e300000000a636865636b706f696e740000000b7769746e6573732d782d310000001a75726e3a6578616d706c653a636861696e3a6973737565722d3100000008000000000000000300000020461cf1cad5fe45a896737bb01ae396639da7ef5c424352ab0d029565e022855200000014323032362d30392d32375431323a30303a30305a"
+    },
+    "cp_x_chain_2": {
+      "about": "witness-x-1, correctly signed, for chain 2: with witness-x-1 listed for a source of chain 2 only, the key the checkpoint's own chain_id would name (K84)",
+      "signed_with": "witness-x-1",
+      "checkpoint": {
+        "profile": "dps-anchoring",
+        "profile_version": "0.2.0",
+        "assertion": "checkpoint",
+        "chain_id": "urn:example:chain:issuer-2",
+        "count": 3,
+        "head_link": "461cf1cad5fe45a896737bb01ae396639da7ef5c424352ab0d029565e0228552",
+        "checkpoint_time": "2026-09-27T12:00:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "witness-x-1",
+          "value_b64": "Mz4+39GD70SfuSZM8cIp2Nb49ouZuZZPiKsJFhovXb+Rr5x1av00ebFcrLBgC5yWbsaZmF9LmREAntYPAbjUCQ=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000d6470732d616e63686f72696e6700000005302e322e300000000a636865636b706f696e740000000b7769746e6573732d782d310000001a75726e3a6578616d706c653a636861696e3a6973737565722d3200000008000000000000000300000020461cf1cad5fe45a896737bb01ae396639da7ef5c424352ab0d029565e022855200000014323032362d30392d32375431323a30303a30305a"
     },
     "cp_org": {
       "about": "issuer-seal-1, the issuer's own key (role organisation)",

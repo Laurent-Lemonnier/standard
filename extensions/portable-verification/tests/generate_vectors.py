@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Writes vectors.json for the portable verification extension, version 0.2.0 (a proposal).
+"""Writes vectors.json for the portable verification extension, version 0.3.0 (a proposal).
 
 Everything in vectors.json is computed from published inputs, so that another implementation can recompute it:
 
