@@ -1826,6 +1826,103 @@
         "holder": "Example issuer (test only)"
       }
     },
+    "seal_attachment_v020": {
+      "about": "org-seal-1 seals the attachment of DR-2099-101 as action binding 0.2.0 wrote it, with a four-member copy of the seal",
+      "signed_with": "org-seal-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "organisation_seal",
+        "sealed": {
+          "kind": "attachment",
+          "id": "DR-2099-101",
+          "digest": "ea6e16c7f83b1a85cba9ff4cd5c03b29256fe596d0621b6691ffb33e58c4adea"
+        },
+        "sealed_at": "2026-10-01T09:30:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "org-seal-1",
+          "value_b64": "zVd8cs1nE3TbB3G/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a6f72672d7365616c2d310000000a6174746163686d656e740000000b44522d323039392d31303100000020ea6e16c7f83b1a85cba9ff4cd5c03b29256fe596d0621b6691ffb33e58c4adea00000014323032362d31302d30315430393a33303a30305a",
+      "attachment": {
+        "profile": "dps-action-binding",
+        "profile_version": "0.2.0",
+        "decision_id": "DR-2099-101",
+        "action_specifications": [
+          {
+            "spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+            "representation": {
+              "kind": "original_bytes",
+              "media_type": "application/json"
+            },
+            "content": {
+              "availability": "available",
+              "bytes_b64": "eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9"
+            },
+            "summary": {
+              "operation": "payment.release",
+              "target": "urn:example:vendor:7",
+              "policy_version": "urn:example:payment-policy:4",
+              "input_version_refs": [
+                "urn:example:invoice:114#v2"
+              ]
+            }
+          }
+        ],
+        "stages": [
+          {
+            "stage_id": "p1",
+            "kind": "proposal",
+            "at": "2026-10-01T09:00:00Z",
+            "origin": "ai",
+            "spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+            "deployer_role_pointer": "urn:example:role:payables-drafting",
+            "system_name": "example-model",
+            "version": "1"
+          },
+          {
+            "stage_id": "v1",
+            "kind": "review",
+            "at": "2026-10-01T09:10:00Z",
+            "reviewer_ref": "owner-example-1",
+            "shown_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+            "proposal_ref": "p1",
+            "shown_view_ref": "urn:example:review-view:101-1",
+            "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193"
+          },
+          {
+            "stage_id": "o1",
+            "kind": "outcome",
+            "at": "2026-10-01T09:12:00Z",
+            "review_ref": "v1",
+            "outcome": "approved",
+            "actor_ref": "owner-example-1",
+            "method": "signature",
+            "approved_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+            "authority": {
+              "authority_ref": "urn:example:charter:CH-EXAMPLE-1#payables-delegation"
+            },
+            "rationale": {
+              "timing": "contemporaneous",
+              "ai_assisted": false,
+              "recorded_at": "2026-10-01T09:12:00Z",
+              "text_ref": "urn:example:rationale:101-1"
+            },
+            "core_ref": {
+              "field": "affirmation_record"
+            }
+          }
+        ],
+        "issuer_signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "org-seal-1",
+          "signed_bytes_ref": "dps-signatures 0.2.0 organisation_seal",
+          "value_b64": "zVd8cs1nE3TbB3G/0EMAHkDJnIgIji+n3a0CJyMUK20XUxbr1h0gg4tWqCoyPkynRzwBqmeIeGXJdMeffKDaDg=="
+        }
+      }
+    },
     "seal_attachment_wrong_rule": {
       "about": "a seal over the digest of the attachment's bytes with the embedded copy's value present, not replaced by A",
       "signed_with": "org-seal-1",

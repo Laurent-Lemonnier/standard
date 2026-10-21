@@ -156,6 +156,10 @@ def build():
         "a0_older", "org-seal-1 seals the same record's earlier attachment, with the proposal, the review and the "
         "approval only: a valid signature, which says nothing about whether a later attachment exists",
         older_template, "org-seal-1", SEALED_AT["A0_older"])
+    # A1, the rejection of DR-2099-102, signed: another record's signed attachment, for a timestamp over a signature
+    # that is not A0's.
+    attachments["A1_signed"], _ = sig("a1", "org-seal-1 seals A1, the attachment of DR-2099-102", a1_template,
+                                      "org-seal-1", "2026-10-02T10:00:00Z")
     seals["seal_a0"] = {"about": "the seal of A0 as the signatures profile carries it beside the attachment",
                         "assertion": seal_a0}
     seals["seal_a0_older"] = {"about": "the seal of A0_older", "assertion": seal_older}
@@ -264,12 +268,22 @@ def build():
     v_bad = sigs["a0_bad_signature"]["issuer_signature"]["value_b64"]
     ts("a0_bad_signature", "TSA 1 over the changed signature value, which verifies on nothing", v_bad, of_copy("a0"),
        tsa1, "2026-10-01T10:30:00Z", 607)
+    ts("a0_older", "TSA 1 over A0_older's signature value: another attachment's signature, named like A0's (same "
+       "record, key and kind)", sigs["a0_older"]["issuer_signature"]["value_b64"], of_copy("a0_older"), tsa1,
+       "2026-10-01T09:20:00Z", 608)
+    ts("a1_signed", "TSA 1 over A1_signed's signature value: another record's signature",
+       sigs["a1"]["issuer_signature"]["value_b64"], of_copy("a1"), tsa1, "2026-10-02T10:30:00Z", 610)
+    ts("a0_late_stage", "TSA 1 over A0_late_stage's signature value at 10:15, while the attachment dates its result "
+       "stage 10:30", sigs["a0_late_stage"]["issuer_signature"]["value_b64"], of_copy("a0_late_stage"), tsa1,
+       "2026-10-01T10:15:00Z", 609)
 
     beside = {
         "beside": {"profile": SIGNATURES_PROFILE, "profile_version": SIGNATURES_VERSION,
                    "organisation_seals": [seals["seal_a0"]["assertion"]], "timestamps": [timestamps["a0"]]},
         "seal_only": {"profile": SIGNATURES_PROFILE, "profile_version": SIGNATURES_VERSION,
                       "organisation_seals": [seals["seal_a0"]["assertion"]]},
+        "a1_timestamp": {"profile": SIGNATURES_PROFILE, "profile_version": SIGNATURES_VERSION,
+                         "organisation_seals": [seals["seal_a0"]["assertion"]], "timestamps": [timestamps["a1_signed"]]},
     }
     sig_validator = Draft202012Validator(sig_attachment_schema)
     for name, att in beside.items():

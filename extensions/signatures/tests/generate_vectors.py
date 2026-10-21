@@ -792,6 +792,19 @@ def build():
                 {"kind": "attachment", "id": DECISION_A, "digest": sha256(compact(variant)).hex()}, sealed_at_a)
         seals[name]["issuer_signature"] = dict(variant["issuer_signature"],
                                                value_b64=seals[name]["assertion"]["signature"]["value_b64"])
+    # The same attachment as action binding 0.2.0 wrote it: its copy has four members, no sealed_at. The copy check
+    # still reads such an attachment, on its four members (V26); the 0.3.0 schema refuses it, so it is kept here
+    # whole (attachment) and checked directly.
+    ab_v020 = copy.deepcopy(ab_approved)
+    ab_v020["profile_version"] = "0.2.0"
+    ab_v020["issuer_signature"] = {"algorithm": "Ed25519", "key_ref": "org-seal-1",
+                                   "signed_bytes_ref": f"{PROFILE} {VERSION} organisation_seal",
+                                   "value_b64": "A" * ED25519_SIGNATURE_B64_LENGTH}
+    mk_seal("seal_attachment_v020", "org-seal-1 seals the attachment of DR-2099-101 as action binding 0.2.0 wrote it, "
+            "with a four-member copy of the seal", "org-seal-1",
+            {"kind": "attachment", "id": DECISION_A, "digest": sha256(compact(ab_v020)).hex()}, sealed_at_a)
+    ab_v020["issuer_signature"]["value_b64"] = seals["seal_attachment_v020"]["assertion"]["signature"]["value_b64"]
+    seals["seal_attachment_v020"]["attachment"] = ab_v020
     # The copy written with an escape: JSON lets a writer escape / as \/. The rule replaces the value's characters,
     # whatever the writing, so this writing gives the sealed digest, as the writing with no escape does; replacing the
     # 92 written characters instead gives another digest, and is not the rule. Both are given here.
