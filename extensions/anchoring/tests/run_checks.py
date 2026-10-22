@@ -335,6 +335,22 @@ def accuracy(tst):
     return timedelta(seconds=seconds or 0, milliseconds=millis or 0, microseconds=micros or 0)
 
 
+def signature_verifies(cp, policy):
+    """Whether a held checkpoint's signature verifies over its own fields, with the policy's witness key for its
+    key_ref: what a timestamp over that signature value may take the witness's time from. Says nothing about whether
+    the key is listed for a source or a chain, which check_checkpoint says."""
+    key = next((k for k in policy.get("keys", []) if k.get("key_ref") == cp["signature"].get("key_ref")), None)
+    if key is None or key.get("role") != "witness" or key.get("algorithm") != "Ed25519" or \
+            cp["signature"].get("algorithm") != "Ed25519" or strict_hex(key.get("public_key_hex")) is None:
+        return False
+    try:
+        Ed25519PublicKey.from_public_bytes(strict_hex(key["public_key_hex"])).verify(
+            base64.b64decode(cp["signature"]["value_b64"], validate=True), checkpoint_signed_bytes(cp))
+        return True
+    except (Unencodable, InvalidSignature, ValueError):
+        return False
+
+
 def check_timestamp(ts, policy, export, chain_id, held):
     """Reference check of one timestamp assertion. held: the checkpoints the verifier holds, for a signature subject."""
     checks = {k: "not_checked" for k in CHECKS}
@@ -375,9 +391,15 @@ def check_timestamp(ts, policy, export, chain_id, held):
         findings.append(f"the subject names a {subject['of']['assertion']} of the signatures profile, which checks it; "
                         "this check holds checkpoints only")
     else:
-        same = [c for c in held if "signature" in c and c["signature"]["value_b64"] == subject["value_b64"]]
-        if not same:
+        # Only a checkpoint whose signature verifies over its own fields says what the witness signed: a copy presented
+        # with another checkpoint_time carries the same value, and its time is not the witness's.
+        with_value = [c for c in held if "signature" in c and c["signature"]["value_b64"] == subject["value_b64"]]
+        same = [c for c in with_value if signature_verifies(c, policy)]
+        if not with_value:
             findings.append("the verifier holds no checkpoint with this signature value")
+        elif not same:
+            findings.append("the verifier holds a checkpoint with this signature value, but the signature does not "
+                            "verify over that checkpoint's fields: not the checkpoint the witness signed")
         else:
             c, of = same[0], subject["of"]
             if (c["signature"]["key_ref"], c["chain_id"], c["count"]) == (of["key_ref"], of["chain_id"], of["count"]):
@@ -636,6 +658,8 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
     out = {"obtained_from": where}
     if obtained.get("source_ref"):
         out["source_ref"] = obtained["source_ref"]
+    if where == "beside_export" and "attachment_index" in obtained:  # its place in the attachment's checkpoints
+        out["attachment_index"] = obtained["attachment_index"]
     if cp is not None:
         out["checkpoint"] = {k: cp[k] for k in ("chain_id", "count", "head_link", "checkpoint_time") if k in cp}
     policy_result = check_policy(policy)
@@ -755,8 +779,8 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
 
 def all_obtained(ctx):
     """The checkpoints the verifier obtained from its sources, then those carried beside the export, in that order."""
-    beside = [{"checkpoint": cp, "obtained_from": "beside_export"}
-              for cp in (ctx["attachment"] or {}).get("checkpoints", [])]
+    beside = [{"checkpoint": cp, "obtained_from": "beside_export", "attachment_index": i}
+              for i, cp in enumerate((ctx["attachment"] or {}).get("checkpoints", []))]
     return list(ctx["obtained"]) + beside
 
 
@@ -860,6 +884,8 @@ def read_with_documents(report, ctx):
         ref = cp_ref[i]
         if (r["obtained_from"], r.get("source_ref")) != (ref["obtained_from"], ref.get("source_ref")):
             problems.append(f"checkpoint {i}: not reported as obtained from where it was")
+        if "attachment_index" in r and r["attachment_index"] != ref.get("attachment_index"):
+            problems.append(f"checkpoint {i}: attachment_index is not the checkpoint's place in the attachment")
         if ref.get("checkpoint") is not None and r.get("checkpoint") != ref["checkpoint"]:
             problems.append(f"checkpoint {i}: values not as the source gave them")
         for dim in CHECKPOINT_DIMENSIONS:

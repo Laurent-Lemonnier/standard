@@ -585,7 +585,10 @@ def build():
     if test_keys[rsa_name] != anchoring["test_keys"][rsa_name]:
         raise ValueError(f"{rsa_name}: the RSA key no longer matches the anchoring vectors")
 
-    certs = {"org-seal-1": seal_certificate(ed["org-seal-1"], 0x0B01)}
+    certs = {"org-seal-1": seal_certificate(ed["org-seal-1"], 0x0B01),
+             # Another organisation's key in a certificate of the same form: pinned for org-seal-1, it does not hold
+             # org-seal-1's key (O47).
+             "org-seal-x": seal_certificate(ed["org-seal-x"], 0x0B02)}
     tsa_certs = {n: base64.b64decode(anchoring["tsa_certificates"][n]["certificate_b64"])
                  for n in ANCHORING_P256 + (rsa_name,)}
     for n, der in tsa_certs.items():

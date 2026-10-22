@@ -739,6 +739,8 @@ def check_seal_subject(seal, ctx):
             findings.append(f"the sealed digest is not the digest of the attachment of {s['id']} as issued (with an "
                             "embedded copy of the seal replaced by A)")
         version = att.get("profile_version")
+        if not isinstance(version, str):  # a version that is not text names no table entry; the finding shows it
+            version = repr(version)
         if "issuer_signature" in att and version not in COPY_MEMBERS:
             # A version this check does not know: it cannot say which members a copy has, so it does not compare.
             out["embedded_copy"] = "not_checked"
@@ -1518,6 +1520,15 @@ def vector_case(c, v):
         r = check_seal_subject(s["assertion"], {"action_binding": {att["decision_id"]: other}})
         if r.get("embedded_copy") != "not_checked" or c["unknown_version"] not in " ".join(r.get("findings", [])):
             bad.append("an attachment of an unknown version compared, or not said")
+        for odd in (["0.3.0"], {"v": "0.3.0"}, 3):  # a version that is not text: not compared, and no error raised
+            other["profile_version"] = odd
+            try:
+                r = check_seal_subject(s["assertion"], {"action_binding": {att["decision_id"]: other}})
+            except Exception as exc:
+                bad.append(f"a profile_version written as {type(odd).__name__} raises {type(exc).__name__}")
+                continue
+            if r.get("embedded_copy") != "not_checked":  # the sealed digest fails too: the bytes changed with it
+                bad.append(f"a profile_version written as {type(odd).__name__}: the copy compared")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")

@@ -188,7 +188,7 @@
       "then": {"required": ["source_ref"], "properties": {"basis": {"const": "independent_source"}}}
     },
     "time_assurance": {
-      "description": "Time. Verified only against a verified independent timestamp over the entry's signature value, from the signatures attachment beside the export: it shows that the signature, and so the digest it names, existed no later than no_later_than. It never shows when the decision was made or affirmed; the issuer's own times (affirmation_record.timestamp, sealed_at) are its assertions.",
+      "description": "Time. Verified only against a verified independent timestamp over the entry's verified signature (the signature and the key's state when it signed), from the signatures attachment beside the export: it shows that the signature, and so the digest it names, existed no later than no_later_than. It never shows when the decision was made or affirmed; the issuer's own times (affirmation_record.timestamp, sealed_at) are its assertions.",
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "basis"],

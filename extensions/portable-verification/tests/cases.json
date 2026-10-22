@@ -83,7 +83,8 @@
     {"id": "P54", "description": "verified time that names no timestamp", "schema": "report", "patch": [{"remove": "/entries/0/time_assurance/timestamp_index"}], "expected": "fail"},
     {"id": "P55", "description": "identity called verified against an independent source it does not name", "schema": "report", "patch": [{"set": "/entries/0/identity_assurance", "value": {"status": "verified", "basis": "independent_source"}}], "expected": "fail"},
     {"id": "P56", "description": "time called verified next to an entry signature that is not (its key state failed): new in 0.3.0", "schema": "report", "patch": [{"set": "/entries/0/cryptographic_verification/signature/status", "value": "failed"}, {"set": "/entries/0/cryptographic_verification/signature/key_state", "value": {"status": "failed", "key_ref": "org-seal-1", "findings": ["the earliest independent timestamp over the signature is not earlier than the compromise"]}}], "expected": "fail"},
-    {"id": "P57", "description": "the 0.2.0 report profile version", "schema": "report", "patch": [{"set": "/profile_version", "value": "0.2.0"}], "expected": "fail"}
+    {"id": "P57", "description": "the 0.2.0 report profile version", "schema": "report", "patch": [{"set": "/profile_version", "value": "0.2.0"}], "expected": "fail"},
+    {"id": "P58", "description": "time called verified next to an unsigned entry (its signature not checked): the rule holds for every way the signature is not verified, not for a failed one only", "schema": "report", "patch": [{"set": "/entries/0/cryptographic_verification/signature", "value": {"status": "not_checked", "findings": ["the entry carries no signature"]}}], "expected": "fail"}
   ],
   "vector_cases": [
     {"id": "W01", "description": "SHA-256 known value for 'abc' (FIPS 180-2)", "check": "known_vector", "text": "abc", "digest": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "expected": "match"},

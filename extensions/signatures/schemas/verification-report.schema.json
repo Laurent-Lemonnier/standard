@@ -106,7 +106,7 @@
         "status": {"$ref": "#/$defs/status"},
         "checked_against": {"enum": ["action_binding_attachment", "export_entry", "export"]},
         "covers_affirmation_record": {"type": "boolean", "description": "A person's affirmation only: whether the sealed bytes, and so the signed digest, include affirmation_record, as the export states."},
-        "embedded_copy": {"$ref": "#/$defs/status", "description": "A seal of an attachment only: the copy of the seal the attachment carries as issuer_signature agrees with the seal in every member, algorithm, key reference, signed-bytes reference and value (verified), or there is none (not_checked)."},
+        "embedded_copy": {"$ref": "#/$defs/status", "description": "A seal of an attachment only: the copy of the seal the attachment carries as issuer_signature agrees with the seal in every member its version has (verified): algorithm, key reference, signed-bytes reference and value for action binding 0.2.0, sealed_at as well for 0.3.0. Failed where a member differs or the copy has another. Not checked where there is no copy, or the attachment is of a version this check does not compare, the finding saying which."},
         "findings": {"$ref": "#/$defs/findings"}
       },
       "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},

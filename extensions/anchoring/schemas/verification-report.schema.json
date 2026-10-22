@@ -258,12 +258,13 @@
             }
           ]
         },
+        "attachment_index": {"type": "integer", "minimum": 0, "description": "A checkpoint beside the export only: its place in the attachment's checkpoints, counted from 0, so that a result is paired with its checkpoint without resting on the order of the results."},
         "freshness": {"const": "not_established", "description": "A checkpoint beside the export only: always not_established, since the issuer chose which checkpoint to carry."},
         "findings": {"$ref": "#/$defs/findings"}
       },
       "allOf": [
         {
-          "description": "A checkpoint beside the export is never independent: its status and independence fail, it is not compared under comparison, and its prefix and freshness are reported. Only it has them.",
+          "description": "A checkpoint beside the export is never independent: its status and independence fail, it is not compared under comparison, and its prefix and freshness are reported. Only it has them, and only it may name its attachment_index.",
           "if": {"properties": {"obtained_from": {"const": "beside_export"}}, "required": ["obtained_from"]},
           "then": {
             "required": ["prefix", "freshness"],
@@ -273,7 +274,7 @@
               "comparison": {"properties": {"status": {"const": "not_checked"}}}
             }
           },
-          "else": {"not": {"anyOf": [{"required": ["prefix"]}, {"required": ["freshness"]}]}}
+          "else": {"not": {"anyOf": [{"required": ["prefix"]}, {"required": ["freshness"]}, {"required": ["attachment_index"]}]}}
         },
         {
           "if": {"properties": {"obtained_from": {"const": "configured_source"}}, "required": ["obtained_from"]},
