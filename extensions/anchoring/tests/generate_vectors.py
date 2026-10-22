@@ -40,6 +40,8 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
+import cbor2  # pinned; writes the CBOR of the SCITT vectors. The runner reads CBOR with its own strict reader.
+
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE / "vectors.json"
 
@@ -197,7 +199,9 @@ def raw_public(key):
 
 
 ED25519_NAMES = ("witness-a-1", "witness-b-1", "witness-b-2", "witness-c-1", "witness-d-1", "witness-x-1",
-                 "issuer-seal-1")
+                 "issuer-seal-1",
+                 # The test transparency service's keys (role transparency_service), and one the policy does not list.
+                 "service-s-1", "service-s-2", "service-z-1")
 P256_NAMES = ("tsa-example-1", "tsa-example-2", "attacker-1")
 
 
@@ -410,6 +414,58 @@ def make_checkpoint(keys, key_name, chain_id, count, head_link, checkpoint_time,
     if made_over.hex() != out["signed_bytes_hex"]:
         out["signature_made_over_hex"] = made_over.hex()
     return out
+
+
+# ---------------------------------------------------------------- a SCITT transparency service (test only)
+
+COSE_SIGN1_TAG = 18                                        # RFC 9052: a tagged COSE_Sign1
+ALG_ED25519 = -19                                          # RFC 9864: Ed25519; -8 (EdDSA) is deprecated there
+HDR_ALG, HDR_CRIT, HDR_KID, HDR_CWT_CLAIMS = 1, 2, 4, 15    # RFC 9052 header labels; 15 is RFC 9597's CWT claims
+CWT_ISS, CWT_SUB = 1, 2                                    # RFC 8392 claim keys
+HDR_VDS, HDR_VDP = 395, 396                                # RFC 9942: the verifiable data structure, and its proofs
+VDS_RFC9162_SHA256 = 1                                     # RFC 9942: the RFC 9162 SHA-256 Merkle tree
+VDP_INCLUSION_PROOFS = -1                                  # RFC 9942: inclusion proofs, [tree-size, leaf-index, path]
+
+
+def sig_structure(protected, payload):
+    """RFC 9052 section 4.4 for COSE_Sign1: ["Signature1", the protected header's bytes, external_aad (empty), the
+    payload]. These bytes start 84 6a "Signature1"; the shared rule's start "DPS-SIG" 00: no bytes are both."""
+    return cbor2.dumps(["Signature1", protected, b"", payload])
+
+
+def cose_sign1(key, protected, unprotected, payload, detached=False):
+    """A tagged COSE_Sign1 over the payload. protected: the protected header's bytes, given encoded so that a test can
+    write them otherwise than cbor2 would. Returns the bytes and the signature."""
+    signature = key.sign(sig_structure(protected, payload))
+    item = cbor2.CBORTag(COSE_SIGN1_TAG, [protected, unprotected, None if detached else payload, signature])
+    return cbor2.dumps(item), signature
+
+
+def leaf_hash(data):
+    """RFC 9162 section 2.1.1: a leaf's hash is SHA-256(0x00 || the leaf's data). Here the data is the signed
+    statement's bytes as registered, tag included."""
+    return sha256(b"\x00" + data)
+
+
+def merkle_root(hashes_):
+    """RFC 9162 section 2.1.1, MTH over leaf hashes: an interior node is SHA-256(0x01 || left || right), the split at
+    the largest power of two smaller than the count."""
+    n = len(hashes_)
+    if n == 1:
+        return hashes_[0]
+    k = 1 << (n - 1).bit_length() - 1
+    return sha256(b"\x01" + merkle_root(hashes_[:k]) + merkle_root(hashes_[k:]))
+
+
+def inclusion_path(hashes_, m):
+    """RFC 9162 section 2.1.3.1, PATH(m, D[n]): the sibling hashes from leaf m up to the root."""
+    n = len(hashes_)
+    if n == 1:
+        return []
+    k = 1 << (n - 1).bit_length() - 1
+    if m < k:
+        return inclusion_path(hashes_[:k], m) + [merkle_root(hashes_[k:])]
+    return inclusion_path(hashes_[k:], m - k) + [merkle_root(hashes_[:k])]
 
 
 # ---------------------------------------------------------------- the whole file
@@ -666,6 +722,167 @@ def build():
                                              "chain_ids": chains, "key_refs": refs})
     policy["checkpoint_sources"].append({"source_ref": "log-e", "kind": "transparency_log",
                                          "holder": "Example log E (test only)", "chain_ids": [CHAIN]})
+    # A SCITT transparency service: its keys in role transparency_service, listed in order; the witness keys whose
+    # statements it registers; the chain it is used for. log-e above keeps no format, as in 0.2.0 (K24).
+    key("service-s-1", "service-s-1", "Example log S (test only)", "transparency_service", "2026-01-01T00:00:00Z",
+        "2027-12-31T23:59:59Z")
+    key("service-s-2", "service-s-2", "Example log S (test only)", "transparency_service", "2026-06-01T00:00:00Z",
+        "2027-12-31T23:59:59Z")
+    policy["checkpoint_sources"].append({"source_ref": "log-s", "kind": "transparency_log", "format": "scitt",
+                                         "holder": "Example log S (test only)", "chain_ids": [CHAIN],
+                                         "key_refs": ["witness-a-1", "witness-b-2"],
+                                         "service_key_refs": ["service-s-1", "service-s-2"]})
+
+    # ---- SCITT signed statements, registered in a small RFC 9162 log kept by the test service
+    holder_of = {k["key_ref"]: k["holder"] for k in policy["keys"]}
+    statements = {}
+
+    def protected_header(kid, iss, sub, alg=ALG_ED25519, extra=None, no_iss=False):
+        claims = {CWT_SUB: sub} if no_iss else {CWT_ISS: iss, CWT_SUB: sub}
+        header = {HDR_ALG: alg, HDR_KID: kid.encode("utf-8"), HDR_CWT_CLAIMS: claims}
+        header.update(extra or {})
+        return cbor2.dumps(header)
+
+    def statement(name, about, key_name, of, *, kid=None, iss=None, sub=None, alg=ALG_ED25519, extra=None,
+                  no_iss=False, payload=None, protected=None, rewrite=None):
+        """A signed statement whose payload is the checkpoint `of`'s signed bytes under the shared rule (its key_ref
+        field set to kid), made by key_name. rewrite(raw, protected, payload, signature) writes the bytes otherwise."""
+        cp = checkpoints[of]["checkpoint"]
+        kid = kid or key_name
+        iss = holder_of.get(key_name, "") if iss is None else iss
+        sub = cp["chain_id"] if sub is None else sub
+        protected = protected_header(kid, iss, sub, alg, extra, no_iss) if protected is None else protected
+        payload = signed_bytes(checkpoint_fields(cp, key_ref=kid)) if payload is None else payload
+        raw, signature = cose_sign1(ed[key_name], protected, {}, payload)
+        if rewrite:
+            raw = rewrite(raw, protected, payload, signature)
+        statements[name] = {"about": about, "signed_with": key_name,
+                            "checkpoint": {k: cp[k] for k in ("chain_id", "count", "head_link", "checkpoint_time")},
+                            "key_ref": kid, "statement_b64": b64(raw), "payload_hex": payload.hex(),
+                            "to_be_signed_hex": sig_structure(protected, payload).hex(),
+                            "carrier": {"format": "scitt", "statement_b64": b64(raw)}}
+        return raw
+
+    def tagged(protected, payload, signature):
+        return cbor2.dumps(cbor2.CBORTag(COSE_SIGN1_TAG, [protected, {}, payload, signature]))
+
+    a_claims = cbor2.dumps({CWT_ISS: holder_of["witness-a-1"], CWT_SUB: CHAIN})
+    statement("st_a", "witness-a-1's statement of cp_a: the payload is cp_a's signed bytes under the shared rule, the "
+              "header pinned (alg -19, kid witness-a-1, CWT claims iss the holder and sub the chain)", "witness-a-1",
+              "cp_a")
+    statement("st_b2", "witness-b-2's statement of cp_b2", "witness-b-2", "cp_b2")
+    statement("st_a_count_4", "witness-a-1's statement of cp_a_count_4, four entries", "witness-a-1", "cp_a_count_4")
+    statement("st_a_count_2", "witness-a-1's statement of cp_a_count_2, a filler leaf of the log", "witness-a-1",
+              "cp_a_count_2")
+    statement("st_a_chain_2", "witness-a-1's statement of cp_a_chain_2: for chain 2, which log-s is not configured "
+              "for", "witness-a-1", "cp_a_chain_2")
+    statement("st_by_service", "the service's own key signs a statement of cp_a's fields (kid service-s-1): not a "
+              "witness", "service-s-1", "cp_a")
+    statement("st_a_sub_other", "st_a with sub naming chain 2 while the payload names chain 1", "witness-a-1", "cp_a",
+              sub=CHAIN_2)
+    statement("st_a_no_iss", "st_a with no iss claim", "witness-a-1", "cp_a", no_iss=True)
+    statement("st_a_iss_other", "st_a with iss naming someone other than the key's holder", "witness-a-1", "cp_a",
+              iss="Someone else (test only)")
+    statement("st_a_alg_8", "st_a with alg -8 (EdDSA), which RFC 9864 deprecates", "witness-a-1", "cp_a", alg=-8)
+    statement("st_a_crit", "st_a with a critical header this check does not know", "witness-a-1", "cp_a",
+              extra={HDR_CRIT: ["urn:example:x"], "urn:example:x": 1})
+    statement("st_a_kid_unknown", "st_a signed by witness-a-1 under a kid the policy does not list", "witness-a-1",
+              "cp_a", kid="witness-z-1")
+    statement("st_a_map_payload", "st_a with its payload written as a CBOR map of the fields, not the signed bytes",
+              "witness-a-1", "cp_a", payload=cbor2.dumps({"chain_id": CHAIN, "count": 3, "head_link": links["L2"],
+                                                         "checkpoint_time": "2026-09-27T12:00:00Z"}))
+    statement("st_a_dup_label", "st_a with the protected header naming label 1 (alg) twice: not read",
+              "witness-a-1", "cp_a",
+              protected=b"\xa4" + cbor2.dumps(1) + cbor2.dumps(ALG_ED25519) + cbor2.dumps(1) + cbor2.dumps(ALG_ED25519)
+              + cbor2.dumps(4) + cbor2.dumps(b"witness-a-1") + cbor2.dumps(15) + a_claims)
+    statement("st_a_long_int", "st_a with alg written as 39 00 12 (-19 in three bytes, not its shortest form 32): "
+              "not read", "witness-a-1", "cp_a",
+              protected=b"\xa3" + cbor2.dumps(1) + b"\x39\x00\x12" + cbor2.dumps(4) + cbor2.dumps(b"witness-a-1")
+              + cbor2.dumps(15) + a_claims)
+    statement("st_a_indefinite", "st_a written as an indefinite-length array: not read", "witness-a-1", "cp_a",
+              rewrite=lambda raw, p, pl, s: b"\xd2\x9f" + cbor2.dumps(p) + b"\xa0" + cbor2.dumps(pl) + cbor2.dumps(s)
+              + b"\xff")
+    statement("st_a_trailing", "st_a followed by one more byte: not read", "witness-a-1", "cp_a",
+              rewrite=lambda raw, p, pl, s: raw + b"\x00")
+    statement("st_a_untagged", "st_a without the COSE_Sign1 tag: not read", "witness-a-1", "cp_a",
+              rewrite=lambda raw, p, pl, s: cbor2.dumps([p, {}, pl, s]))
+    statement("st_a_dps_value", "st_a with cp_a's signature under the shared rule in place of the COSE signature: the "
+              "two formats' bytes differ, so it does not verify", "witness-a-1", "cp_a",
+              rewrite=lambda raw, p, pl, s: tagged(p, pl, base64.b64decode(
+                  checkpoints["cp_a"]["checkpoint"]["signature"]["value_b64"])))
+    # The reverse: a plain checkpoint carrying st_a's COSE signature as its value.
+    reverse = copy.deepcopy(checkpoints["cp_a"])
+    reverse["about"] = "cp_a with st_a's COSE signature as its signature value: made over the Sig_structure, not the " \
+                       "shared rule's bytes, so it does not verify"
+    reverse["checkpoint"]["signature"]["value_b64"] = b64(cbor2.loads(
+        base64.b64decode(statements["st_a"]["statement_b64"])).value[3])
+    reverse["signature_made_over_hex"] = statements["st_a"]["to_be_signed_hex"]
+    checkpoints["cp_a_cose_value"] = reverse
+
+    # The log: five leaves, each a statement's bytes as registered; st_a is leaf 1, st_b2 leaf 2, st_a_count_4 leaf 4.
+    log_order = ["st_a_count_2", "st_a", "st_b2", "st_a_chain_2", "st_a_count_4"]
+    leaf_hashes = [leaf_hash(base64.b64decode(statements[n]["statement_b64"])) for n in log_order]
+    root = merkle_root(leaf_hashes)
+
+    def receipt(name, of, about, service_key, *, index=None, proof=None, kid=None, alg=ALG_ED25519,
+                vds=VDS_RFC9162_SHA256, no_proof=False, break_path=False):
+        """A receipt (RFC 9942) for the statement `of`: a COSE_Sign1 by the service over the root, its payload
+        detached, the inclusion proof in the unprotected header. The vector keeps the statement's members."""
+        index = log_order.index(of) if index is None else index
+        path = inclusion_path(leaf_hashes, index)
+        if break_path:
+            path = [bytes([path[0][0] ^ 0x01]) + path[0][1:]] + path[1:]
+        proof = [len(leaf_hashes), index, path] if proof is None else proof
+        protected = cbor2.dumps({HDR_ALG: alg, HDR_KID: (kid or service_key).encode("utf-8"), HDR_VDS: vds})
+        unprotected = {} if no_proof else {HDR_VDP: {VDP_INCLUSION_PROOFS: [cbor2.dumps(proof)]}}
+        raw, _ = cose_sign1(ed[service_key], protected, unprotected, root, detached=True)
+        entry = copy.deepcopy(statements[of])
+        entry.update(about=about, receipt_signed_with=service_key, receipt_b64=b64(raw), tree_size=proof[0],
+                     leaf_index=proof[1], root_hex=root.hex(),
+                     leaf_hash_hex=leaf_hash(base64.b64decode(entry["statement_b64"])).hex(),
+                     receipt_to_be_signed_hex=sig_structure(protected, root).hex())
+        entry["carrier"]["receipt_b64"] = b64(raw)
+        statements[name] = entry
+
+    for n in log_order:
+        receipt(n, n, statements[n]["about"] + "; with the service's receipt (service-s-1), leaf "
+                f"{log_order.index(n)} of {len(log_order)}", "service-s-1")
+    statements["st_a_no_receipt"] = {**copy.deepcopy(statements["st_a"]), "about": "st_a without a receipt"}
+    for k in ("receipt_b64", "receipt_signed_with", "tree_size", "leaf_index", "root_hex", "leaf_hash_hex",
+              "receipt_to_be_signed_hex"):
+        statements["st_a_no_receipt"].pop(k, None)
+    statements["st_a_no_receipt"]["carrier"].pop("receipt_b64", None)
+    receipt("st_a_receipt_other", "st_a", "st_a with the receipt of leaf 2 (st_b2): a proof for another statement",
+            "service-s-1", index=2)
+    receipt("st_a_path_broken", "st_a", "st_a with one bit of the first sibling hash changed: the path does not "
+            "reach the root", "service-s-1", break_path=True)
+    receipt("st_a_receipt_s2", "st_a", "st_a with a receipt by the service's second key, service-s-2, listed too",
+            "service-s-2")
+    receipt("st_a_receipt_by_witness", "st_a", "st_a with a receipt signed by witness-a-1: a witness key, not a "
+            "service key", "witness-a-1")
+    receipt("st_a_receipt_unknown_key", "st_a", "st_a with a receipt by service-z-1, a key the policy does not list",
+            "service-z-1")
+    receipt("st_a_receipt_small_tree", "st_a", "st_a with a proof naming tree size 1 for leaf 1", "service-s-1",
+            proof=[1, 1, []])
+    receipt("st_a_receipt_no_proof", "st_a", "st_a with a receipt carrying no inclusion proof", "service-s-1",
+            no_proof=True)
+    receipt("st_a_receipt_other_vds", "st_a", "st_a with a receipt naming verifiable data structure 2, which this "
+            "check does not know", "service-s-1", vds=2)
+    receipt("st_a_receipt_alg_8", "st_a", "st_a with a receipt under alg -8", "service-s-1", alg=-8)
+    scitt = {
+        "about": "A test SCITT transparency service (RFC 9943), test keys only. A statement is a tagged COSE_Sign1 "
+                 "(RFC 9052) by a witness key whose payload is the checkpoint's signed bytes under the shared rule, "
+                 "with its key_ref field equal to kid; the protected header has alg -19 (Ed25519, RFC 9864), kid, "
+                 "and the CWT claims (RFC 9597, label 15) iss, the key's holder, and sub, the chain. A receipt (RFC "
+                 "9942) is a tagged COSE_Sign1 by a service key over the RFC 9162 SHA-256 tree's root, its payload "
+                 "detached, with the verifiable data structure (label 395, value 1) in the protected header and "
+                 "the inclusion proof [tree-size, leaf-index, path] (label 396, key -1) in the unprotected one. A "
+                 "leaf's data is the statement's bytes as registered, tag included; its hash is SHA-256(0x00 || data). "
+                 "to_be_signed_hex is the Sig_structure each signature was made over.",
+        "leaf_rule": "SHA-256(0x00 || statement bytes as registered)",
+        "log": {"leaves": log_order, "leaf_hashes_hex": [h.hex() for h in leaf_hashes], "root_hex": root.hex()},
+        "statements": statements,
+    }
 
     def subject_signature(name):
         c = checkpoints[name]["checkpoint"]
@@ -793,6 +1010,15 @@ def build():
             "status": "verified", "covered_count": 4, "not_covered_indexes": [], "time_basis": "stated_time",
             "time": "2026-09-29T12:00:00Z"}),
     }
+    # st_a carried beside the export, as a verifier reports it: cp_a's result, with the statement's format, its
+    # receipt (service-s-1, leaf 1 of 5) and the log's consistency not checked.
+    beside_results["st_a"] = {**copy.deepcopy(beside_results["cp_a"]), "format": "scitt", "attachment_index": 0,
+                              "receipt": {"status": "verified", "service_key_ref": "service-s-1", "tree_size": 5,
+                                          "leaf_index": 1},
+                              "log_consistency": {"status": "not_checked"}}
+    beside_results["about"] += (" st_a is cp_a's statement carried beside the export with its receipt, as a verifier "
+                                "reports it: format scitt, the receipt verified (service-s-1, leaf 1 of 5), the log's "
+                                "consistency not checked.")
     # An attachment carrying cp_a with its count written twice, 5 first and 3 last: a reader keeping the last member
     # reads cp_a, whose signature verifies; one keeping the first reads a checkpoint of five entries, whose does not.
     carrying = {"profile": PROFILE, "profile_version": VERSION, "chain_id": CHAIN,
@@ -838,6 +1064,7 @@ def build():
         "base_report": report,
         "beside_results": beside_results,
         "texts": texts,
+        "scitt": scitt,
     }
 
 

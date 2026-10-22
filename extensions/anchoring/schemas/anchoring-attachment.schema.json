@@ -20,11 +20,22 @@
     "checkpoints": {
       "type": "array",
       "minItems": 1,
-      "items": {"$ref": "#/$defs/checkpoint"},
-      "description": "Witness-signed checkpoints of the export's chain, carried beside the export. Each is reported on its own dimension (prefix) and is never independent: the issuer chose which to carry. A carried checkpoint is never a source of trust; the witness key comes from the verifier's policy."
+      "items": {"anyOf": [{"$ref": "#/$defs/checkpoint"}, {"$ref": "#/$defs/scitt_statement"}]},
+      "description": "Witness-signed checkpoints of the export's chain, carried beside the export. Each is reported on its own dimension (prefix) and is never independent: the issuer chose which to carry. A carried checkpoint is never a source of trust; the witness key comes from the verifier's policy. An item may also be a SCITT signed statement with its receipt (format scitt): checked as one from a transparency service is, and never independent either."
     }
   },
   "$defs": {
+    "scitt_statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "statement_b64"],
+      "properties": {
+        "format": {"const": "scitt"},
+        "statement_b64": {"$ref": "#/$defs/base64", "description": "A SCITT signed statement (RFC 9943): a tagged COSE_Sign1 whose payload is a checkpoint's signed bytes under the shared rule, as registered."},
+        "receipt_b64": {"$ref": "#/$defs/base64", "description": "The service's receipt for it (RFC 9942), where held."}
+      },
+      "description": "A checkpoint registered with a SCITT transparency service, carried beside the export: the statement as registered, with the service's receipt. The issuer chose to carry it, so it is never independent; the witness and service keys come from the verifier's policy."
+    },
     "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "decision_id": {"type": "string", "pattern": "^DR-[0-9]{4}-[0-9]{3,}$"},
     "stage_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", "description": "A stage identifier as action binding 0.2.0 writes it."},

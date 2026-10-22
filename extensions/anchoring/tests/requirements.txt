@@ -4,3 +4,5 @@ cryptography==50.0.2
 asn1crypto==1.5.1
 cffi==2.1.1
 pycparser==3.0
+# The vector generator writes the SCITT vectors' CBOR with it, and the tests cross-check the strict reader against it.
+cbor2==6.1.5
