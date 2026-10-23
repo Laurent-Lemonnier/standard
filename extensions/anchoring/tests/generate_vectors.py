@@ -825,9 +825,10 @@ def build():
     root = merkle_root(leaf_hashes)
 
     def receipt(name, of, about, service_key, *, index=None, proof=None, kid=None, alg=ALG_ED25519,
-                vds=VDS_RFC9162_SHA256, no_proof=False, break_path=False):
+                vds=VDS_RFC9162_SHA256, no_proof=False, break_path=False, signed_root=None):
         """A receipt (RFC 9942) for the statement `of`: a COSE_Sign1 by the service over the root, its payload
-        detached, the inclusion proof in the unprotected header. The vector keeps the statement's members."""
+        detached, the inclusion proof in the unprotected header. The vector keeps the statement's members.
+        signed_root: the root the service signs, where it is not the five-leaf log's."""
         index = log_order.index(of) if index is None else index
         path = inclusion_path(leaf_hashes, index)
         if break_path:
@@ -835,12 +836,13 @@ def build():
         proof = [len(leaf_hashes), index, path] if proof is None else proof
         protected = cbor2.dumps({HDR_ALG: alg, HDR_KID: (kid or service_key).encode("utf-8"), HDR_VDS: vds})
         unprotected = {} if no_proof else {HDR_VDP: {VDP_INCLUSION_PROOFS: [cbor2.dumps(proof)]}}
-        raw, _ = cose_sign1(ed[service_key], protected, unprotected, root, detached=True)
+        signed = root if signed_root is None else signed_root
+        raw, _ = cose_sign1(ed[service_key], protected, unprotected, signed, detached=True)
         entry = copy.deepcopy(statements[of])
         entry.update(about=about, receipt_signed_with=service_key, receipt_b64=b64(raw), tree_size=proof[0],
-                     leaf_index=proof[1], root_hex=root.hex(),
+                     leaf_index=proof[1], root_hex=signed.hex(),
                      leaf_hash_hex=leaf_hash(base64.b64decode(entry["statement_b64"])).hex(),
-                     receipt_to_be_signed_hex=sig_structure(protected, root).hex())
+                     receipt_to_be_signed_hex=sig_structure(protected, signed).hex())
         entry["carrier"]["receipt_b64"] = b64(raw)
         statements[name] = entry
 
@@ -869,6 +871,29 @@ def build():
     receipt("st_a_receipt_other_vds", "st_a", "st_a with a receipt naming verifiable data structure 2, which this "
             "check does not know", "service-s-1", vds=2)
     receipt("st_a_receipt_alg_8", "st_a", "st_a with a receipt under alg -8", "service-s-1", alg=-8)
+    receipt("st_a_receipt_one_leaf", "st_a", "st_a with a proof [1, 1, []] and a receipt signed over st_a's own leaf "
+            "hash, the root of a one-leaf log: a leaf index equal to the tree size, with a path that otherwise fits",
+            "service-s-1", proof=[1, 1, []], signed_root=leaf_hash(base64.b64decode(statements["st_a"]["statement_b64"])))
+    # Payloads stating a checkpoint_time in another form than the one signed as text: signed by witness-a-1 over
+    # cp_a's other fields. The checkpoint schema refuses these times, so the check fails the signature.
+    for name, other_time in (("st_a_time_offset", "2026-09-27T17:00:00+05:00"),
+                             ("st_a_time_fraction", "2026-09-27T12:00:00.000+00:00"),
+                             ("st_a_time_basic", "20260927T120000Z")):
+        statement(name, f"st_a whose payload states checkpoint_time {other_time}, a form the checkpoint schema "
+                  "refuses", "witness-a-1", "cp_a",
+                  payload=signed_bytes(checkpoint_fields({**checkpoints["cp_a"]["checkpoint"],
+                                                          "checkpoint_time": other_time}, key_ref="witness-a-1")))
+    # Carriers too large or too deep to keep as full statement vectors: each is only what a verifier would hold.
+    deep = b"\xd2" + b"\x81" * 990 + b"\x00"
+    long_iss, _ = cose_sign1(ed["witness-a-1"], protected_header("witness-a-1", "x" * 70000, CHAIN), {},
+                             signed_bytes(checkpoint_fields(checkpoints["cp_a"]["checkpoint"], key_ref="witness-a-1")))
+    carriers = {
+        "deep_nesting": {"about": "a tagged item nesting 990 one-item arrays: well formed, and far deeper than any "
+                                  "statement", "format": "scitt", "statement_b64": b64(deep)},
+        "long_iss": {"about": "witness-a-1's statement of cp_a with an iss of 70,000 characters, so that the "
+                              "protected header and its Sig_structure length need four bytes",
+                     "format": "scitt", "statement_b64": b64(long_iss)},
+    }
     scitt = {
         "about": "A test SCITT transparency service (RFC 9943), test keys only. A statement is a tagged COSE_Sign1 "
                  "(RFC 9052) by a witness key whose payload is the checkpoint's signed bytes under the shared rule, "
@@ -882,6 +907,7 @@ def build():
         "leaf_rule": "SHA-256(0x00 || statement bytes as registered)",
         "log": {"leaves": log_order, "leaf_hashes_hex": [h.hex() for h in leaf_hashes], "root_hex": root.hex()},
         "statements": statements,
+        "carriers": carriers,
     }
 
     def subject_signature(name):

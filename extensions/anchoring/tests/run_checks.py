@@ -666,6 +666,7 @@ HDR_VDS, HDR_VDP = 395, 396                                # RFC 9942: the verif
 VDS_RFC9162_SHA256 = 1                                     # RFC 9942: the RFC 9162 SHA-256 Merkle tree
 VDP_INCLUSION_PROOFS = -1                                  # RFC 9942: inclusion proofs, [tree-size, leaf-index, path]
 KNOWN_STATEMENT_LABELS = {HDR_ALG, HDR_KID, HDR_CWT_CLAIMS}
+MAX_CBOR_NESTING = 16  # far more than a statement, a receipt or a proof needs
 LOG_CONSISTENCY_NOT_CHECKED = ("one inclusion proof shows nothing about the log being append-only or shown to everyone "
                                "alike (RFC 9942 gives consistency proofs for the first; RFC 9943 leaves the second to "
                                "the service and to auditors); a consistency proof against a root the verifier holds "
@@ -713,7 +714,11 @@ def cbor_strict(raw):
             raise NotCbor("an integer or a length not in its shortest form")
         return major, value
 
-    def item():
+    def item(depth=0):
+        # Arrays, maps and tags nest; a statement, a receipt and a proof need a few levels, so deeper nesting is
+        # refused with the reason before it can exhaust the reader.
+        if depth > MAX_CBOR_NESTING:
+            raise NotCbor(f"items nested deeper than {MAX_CBOR_NESTING} levels")
         major, arg = head()
         if major == 0:
             return arg
@@ -728,21 +733,21 @@ def cbor_strict(raw):
             except UnicodeDecodeError:
                 raise NotCbor("a text string that is not UTF-8") from None
         if major == 4:
-            return [item() for _ in range(arg)]
+            return [item(depth + 1) for _ in range(arg)]
         if major == 5:
             out = {}
             for _ in range(arg):
-                k = item()
+                k = item(depth + 1)
                 if not isinstance(k, (int, str)) or isinstance(k, bool):
                     raise NotCbor("a map key that is not an integer or text")
                 if k in out:
                     raise NotCbor(f"the map key {k!r} named twice")
-                out[k] = item()
+                out[k] = item(depth + 1)
             return out
         if major == 6:
             if arg != COSE_SIGN1_TAG:
                 raise NotCbor(f"tag {arg}; this check reads tag 18 (COSE_Sign1) only")
-            return Tagged(arg, item())
+            return Tagged(arg, item(depth + 1))
         return {20: False, 21: True, 22: None}[arg]
 
     value = item()
@@ -764,14 +769,23 @@ def plain(value):
     return value
 
 
+def cbor_head(major, n):
+    """The head of a CBOR item by the full rule (RFC 8949 section 3): the argument in the shortest of 0, 1, 2, 4 or 8
+    bytes."""
+    if n < 24:
+        return bytes([major << 5 | n])
+    for info, size in ((24, 1), (25, 2), (26, 4), (27, 8)):
+        if n < 1 << (8 * size):
+            return bytes([major << 5 | info]) + n.to_bytes(size, "big")
+    raise ValueError("a length beyond 2^64 - 1")
+
+
 def sig_structure(protected, payload):
     """RFC 9052 section 4.4 for COSE_Sign1: ["Signature1", protected header bytes, external_aad (empty), payload],
-    written in the shortest definite form. These bytes start 84 6a "Signature1"; the shared rule's bytes start
-    "DPS-SIG" 00: no bytes are both, so one key may sign both formats."""
+    written in the shortest definite form, whatever the lengths. These bytes start 84 6a "Signature1"; the shared
+    rule's bytes start "DPS-SIG" 00: no bytes are both, so one key may sign both formats."""
     def bstr(data):
-        n = len(data)
-        head = bytes([0x40 | n]) if n < 24 else (b"\x58" + bytes([n]) if n < 256 else b"\x59" + n.to_bytes(2, "big"))
-        return head + data
+        return cbor_head(2, len(data)) + data
     return b"\x84" + b"\x6aSignature1" + bstr(protected) + b"\x40" + bstr(payload)
 
 
@@ -845,9 +859,20 @@ def read_statement(obtained):
         if payload is None:
             raise NotCbor("the statement's payload is detached; a signed statement carries it")
         fields = read_checkpoint_bytes(payload)
+        to_be_signed = sig_structure(protected, payload)
     except (NotCbor, ValueError) as exc:
         info["error"] = f"the statement cannot be read: {exc}"
         return obtained
+    # The fields the payload states are held to the checkpoint schema's rules, as a checkpoint under the shared rule
+    # is: a chain_id of 1 to 256 characters, a time in exactly the signed form, and the rest. A payload outside them
+    # fails the signature with the reason, since its result could not be written in a valid report.
+    stated = {"profile": PROFILE, "profile_version": VERSION, "assertion": "checkpoint",
+              **{k: fields[k] for k in ("chain_id", "count", "head_link", "checkpoint_time")},
+              "signature": {"algorithm": "Ed25519", "key_ref": fields["key_ref"],
+                            "value_b64": base64.b64encode(signature).decode("ascii")}}
+    refused_by_schema = errors(checkpoint_validator(), stated)
+    if refused_by_schema:
+        info["payload_refused"] = f"the payload states a checkpoint the checkpoint schema refuses: {refused_by_schema[0]}"
     kid, claims = pmap.get(HDR_KID), pmap.get(HDR_CWT_CLAIMS)
     info["header"] = {"alg": pmap.get(HDR_ALG), "crit": pmap.get(HDR_CRIT),
                       "kid": kid.decode("utf-8", "replace") if isinstance(kid, bytes) else None,
@@ -859,8 +884,18 @@ def read_statement(obtained):
         **{k: fields[k] for k in ("chain_id", "count", "head_link", "checkpoint_time")},
         "signature": {"algorithm": "Ed25519", "key_ref": info["header"]["kid"] or fields["key_ref"],
                       "value_b64": base64.b64encode(signature).decode("ascii")},
-        "_payload_key_ref": fields["key_ref"], "_to_be_signed": sig_structure(protected, payload)}
+        "_payload_key_ref": fields["key_ref"], "_to_be_signed": to_be_signed}
     return obtained
+
+
+_CHECKPOINT_VALIDATOR = []
+
+
+def checkpoint_validator():
+    """The checkpoint schema's validator, read once."""
+    if not _CHECKPOINT_VALIDATOR:
+        _CHECKPOINT_VALIDATOR.append(Draft202012Validator(strict_json(SCHEMAS["checkpoint"].read_bytes())))
+    return _CHECKPOINT_VALIDATOR[0]
 
 
 def statement_header_findings(cp, info, key):
@@ -871,6 +906,8 @@ def statement_header_findings(cp, info, key):
         return "not_supported", [f"alg {h['alg']!r}; this check takes -19 (Ed25519, RFC 9864), under which -8 (EdDSA) "
                                  "is deprecated"]
     findings = []
+    if info.get("payload_refused"):
+        findings.append(info["payload_refused"])
     if h["crit"] is not None:
         findings.append(f"a critical header this check does not know: {h['crit']!r}")
     if h["kid"] is None:
