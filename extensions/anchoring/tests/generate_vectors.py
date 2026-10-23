@@ -232,7 +232,7 @@ def checkpoint_fields(cp, profile=PROFILE, version=VERSION, assertion="checkpoin
     """The fixed field order of a checkpoint: profile, profile_version, assertion type, key_ref, chain_id,
     count (8-byte big-endian), head_link (32 raw bytes), checkpoint_time (UTF-8)."""
     return [profile.encode("utf-8"), version.encode("utf-8"), assertion.encode("utf-8"),
-            (key_ref or cp["signature"]["key_ref"]).encode("utf-8"), cp["chain_id"].encode("utf-8"),
+            (cp["signature"]["key_ref"] if key_ref is None else key_ref).encode("utf-8"), cp["chain_id"].encode("utf-8"),
             cp["count"].to_bytes(8, "big"), bytes.fromhex(cp["head_link"]), cp["checkpoint_time"].encode("utf-8")]
 
 
@@ -755,7 +755,7 @@ def build():
         """A signed statement whose payload is the checkpoint `of`'s signed bytes under the shared rule (its key_ref
         field set to kid), made by key_name. rewrite(raw, protected, payload, signature) writes the bytes otherwise."""
         cp = checkpoints[of]["checkpoint"]
-        kid = kid or key_name
+        kid = key_name if kid is None else kid
         iss = holder_of.get(key_name, "") if iss is None else iss
         sub = cp["chain_id"] if sub is None else sub
         protected = protected_header(kid, iss, sub, alg, extra, no_iss) if protected is None else protected
@@ -898,6 +898,10 @@ def build():
     statement("st_a_chain_empty", "st_a whose payload states an empty chain_id, which the checkpoint schema refuses",
               WA, "cp_a", payload=signed_bytes(checkpoint_fields({**checkpoints["cp_a"]["checkpoint"], "chain_id": ""},
                                                                  key_ref=WA)))
+    statement("st_a_kid_empty", "st_a with an empty kid, its payload's key_ref empty too", WA, "cp_a", kid="",
+              payload=signed_bytes(checkpoint_fields(checkpoints["cp_a"]["checkpoint"], key_ref="")))
+    statement("st_a_kid_long", "st_a with a kid of 300 characters, its payload's key_ref the same", WA, "cp_a",
+              kid="k" * 300)
     # Carriers too large or too deep to keep as full statement vectors: each is only what a verifier would hold.
     deep = b"\xd2" + b"\x81" * 990 + b"\x00"
     long_iss, _ = cose_sign1(ed[WA], protected_header(WA, "x" * 70000, CHAIN), {},

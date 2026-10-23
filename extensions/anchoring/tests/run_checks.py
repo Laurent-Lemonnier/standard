@@ -1121,11 +1121,18 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
             signature.update(status="failed", findings=[f"{s['key_ref']} is a key in role {key['role']}; only a "
                                                         "witness key signs a checkpoint"])
         elif s["key_ref"] in (shared_rule_keys if scitt else statement_keys):
-            # One key, one purpose (RFC 9943 section 9.4): a key the policy lists both for checkpoints under the shared
-            # rule and for SCITT statements is refused for either.
+            # One key, one purpose (RFC 9943 section 9.4): a key the policy lists for the other format is refused for
+            # this one. From a source the key is also listed for that source, so it is listed both ways; beside the
+            # export it may be listed for the other format only, and the reason says which.
+            listed_both = s["key_ref"] in shared_rule_keys and s["key_ref"] in statement_keys
+            reason = (f"the trust policy lists {s['key_ref']} both for checkpoints under the shared rule and for SCITT "
+                      "statements" if listed_both else
+                      f"the trust policy lists {s['key_ref']} for checkpoints under the shared rule only, so it signs "
+                      "no SCITT statement" if scitt else
+                      f"the trust policy lists {s['key_ref']} for SCITT statements only, so it signs no checkpoint "
+                      "under the shared rule")
             signature.update(status="failed", findings=[
-                f"the trust policy lists {s['key_ref']} both for checkpoints under the shared rule and for SCITT "
-                "statements; a witness signs its statements with a key of their own (RFC 9943 section 9.4)"])
+                reason + "; a witness signs its statements with a key of their own (RFC 9943 section 9.4)"])
         elif s["algorithm"] != "Ed25519" or key["algorithm"] != "Ed25519":
             signature.update(status="not_supported", findings=[f"this check supports Ed25519; the checkpoint uses "
                                                                f"{s['algorithm']}"])
@@ -1149,6 +1156,13 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
                     signature.update(status="failed", findings=[
                         "the signature does not verify over the statement's Sig_structure" if scitt else
                         "the signature does not verify over the checkpoint's signed bytes"])
+    # A statement's kid that a report cannot carry as a key reference (empty, or over 256 characters) is left out of the
+    # result; the header check has already given the reason.
+    if scitt and "key_ref" in signature and not (isinstance(signature["key_ref"], str)
+                                                 and 1 <= len(signature["key_ref"]) <= 256):
+        signature.pop("key_ref")
+        if signature.get("status") == "verified":  # cannot happen: such a kid names no key in a valid policy
+            signature["status"] = "failed"
     out["signature"] = signature
 
     if is_refused:
@@ -1847,6 +1861,9 @@ def checkpoint_case(c, v, validators):
                 summary[f"prefix_{k}"] = r["prefix"].get(k)
     if "conflict" in c["expected"]:
         summary["conflict"] = any("cannot both hold" in f for f in r.get("findings", []))
+    if "finding" in c["expected"]:  # a phrase the reason must hold
+        summary["finding"] = c["expected"]["finding"] if c["expected"]["finding"] in " ".join(
+            r.get("signature", {}).get("findings", [])) else None
     if "result_schema_valid" in c["expected"]:
         # The result as a report carries it: valid against the report schema's checkpoint result.
         written = {"checkpoint_index": 0, **{k: x for k, x in r.items() if not k.startswith("_")}}
