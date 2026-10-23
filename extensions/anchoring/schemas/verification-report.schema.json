@@ -69,6 +69,21 @@
     }
   ],
   "$defs": {
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "service_key_ref": {"$ref": "#/$defs/ref", "description": "The service key (role transparency_service) that signed the receipt, by its kid."},
+        "tree_size": {"type": "integer", "minimum": 1, "description": "The size of the log the receipt attests the statement in."},
+        "leaf_index": {"type": "integer", "minimum": 0, "description": "The statement's leaf, counted from 0."},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {"required": ["service_key_ref", "tree_size", "leaf_index"]},
+      "description": "The service's receipt (RFC 9942) for a signed statement. verified means exactly: the service key named signed that this statement is in its log at tree_size. Not that the log is append-only, nor that it showed everyone the same log, nor when the statement was registered: a receipt states no time. unavailable: a receipt by a revoked service key, which cannot be shown made before the revocation, or no receipt held."
+    },
     "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "ref": {"type": "string", "minLength": 1, "maxLength": 256},
     "instant": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?Z$"},
@@ -259,10 +274,30 @@
           ]
         },
         "attachment_index": {"type": "integer", "minimum": 0, "description": "A checkpoint beside the export only: its place in the attachment's checkpoints, counted from 0, so that a result is paired with its checkpoint without resting on the order of the results."},
+        "format": {"const": "scitt", "description": "A checkpoint obtained as a SCITT signed statement (a transparency service with format scitt, or such a statement carried beside the export). Only it has receipt and log_consistency."},
+        "receipt": {"$ref": "#/$defs/receipt"},
+        "log_consistency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {"status": {"const": "not_checked"}, "findings": {"$ref": "#/$defs/findings"}},
+          "description": "Whether the log is append-only and shown to everyone alike: not checked in this version. One inclusion proof shows neither; a consistency proof against a root the verifier holds would, and is not in this version."
+        },
         "freshness": {"const": "not_established", "description": "A checkpoint beside the export only: always not_established, since the issuer chose which checkpoint to carry."},
         "findings": {"$ref": "#/$defs/findings"}
       },
       "allOf": [
+        {
+          "description": "A SCITT signed statement (format scitt) has its receipt and log_consistency; nothing else has them.",
+          "if": {"required": ["format"]},
+          "then": {"required": ["receipt", "log_consistency"]},
+          "else": {"not": {"anyOf": [{"required": ["receipt"]}, {"required": ["log_consistency"]}]}}
+        },
+        {
+          "description": "From a transparency service, a statement is verified as an independent checkpoint only with its receipt verified: the service signed that it is in its log.",
+          "if": {"properties": {"format": {"const": "scitt"}, "status": {"const": "verified"}}, "required": ["format", "status"]},
+          "then": {"properties": {"receipt": {"properties": {"status": {"const": "verified"}}}}}
+        },
         {
           "description": "A checkpoint beside the export is never independent: its status and independence fail, it is not compared under comparison, and its prefix and freshness are reported. Only it has them, and only it may name its attachment_index.",
           "if": {"properties": {"obtained_from": {"const": "beside_export"}}, "required": ["obtained_from"]},

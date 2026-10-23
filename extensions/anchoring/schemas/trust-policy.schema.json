@@ -66,8 +66,8 @@
         "key_ref": {"$ref": "#/$defs/ref"},
         "holder": {"type": "string", "minLength": 1},
         "role": {
-          "enum": ["witness", "organisation", "person"],
-          "description": "witness: signs checkpoints. organisation and person: the roles of the related signatures profile, so that one policy can hold every key. Only a witness key signs a checkpoint."
+          "enum": ["witness", "organisation", "person", "transparency_service"],
+          "description": "witness: signs checkpoints. organisation and person: the roles of the related signatures profile, so that one policy can hold every key. Only a witness key signs a checkpoint. transparency_service: signs the receipts of a SCITT transparency service (a source with format scitt); it signs no checkpoint."
         },
         "algorithm": {"type": "string", "minLength": 1},
         "public_key_hex": {"type": "string", "pattern": "^(?:[0-9a-f]{2})+$", "description": "The raw public key, in lowercase hex (32 bytes for Ed25519)."},
@@ -102,7 +102,7 @@
         "source_ref": {"$ref": "#/$defs/ref"},
         "kind": {
           "enum": ["witness", "transparency_log", "third_party"],
-          "description": "witness: gives checkpoints signed under the shared rule by one of key_refs. The other kinds give the same values by their own means; 0.2.0 defines no format for them."
+          "description": "witness: gives checkpoints signed under the shared rule by one of key_refs. transparency_log with format scitt: gives SCITT signed statements (RFC 9943) by one of key_refs, each with the service's receipt (RFC 9942) under one of service_key_refs. A transparency_log with no format, and a third_party, give the same values by their own means; this version reads nothing from them."
         },
         "holder": {"type": "string", "minLength": 1},
         "chain_ids": {
@@ -111,10 +111,28 @@
           "items": {"type": "string", "minLength": 1, "maxLength": 256},
           "description": "The chains the verifier uses this source for."
         },
-        "key_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ref"}}
+        "key_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ref"}, "description": "The witness keys this source gives checkpoints, or signed statements, from."},
+        "format": {
+          "const": "scitt",
+          "description": "A transparency_log only. scitt: the source is a SCITT transparency service (RFC 9943); it gives signed statements whose payload is a checkpoint's signed bytes, each with a COSE receipt (RFC 9942). Optional: a transparency_log with no format is reported as not supported."
+        },
+        "service_key_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/ref"},
+          "description": "The service's keys that sign its receipts, in role transparency_service, in order; a receipt names one by kid. RFC 9943 lets the receipt key change."
+        }
       },
       "if": {"properties": {"kind": {"const": "witness"}}, "required": ["kind"]},
-      "then": {"required": ["key_refs"]}
+      "then": {"required": ["key_refs"]},
+      "allOf": [
+        {
+          "description": "format scitt: a transparency_log, with the witness keys whose statements it registers and the service keys that sign its receipts.",
+          "if": {"required": ["format"]},
+          "then": {"required": ["key_refs", "service_key_refs"], "properties": {"kind": {"const": "transparency_log"}}},
+          "else": {"not": {"required": ["service_key_refs"]}}
+        }
+      ]
     }
   }
 }

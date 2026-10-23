@@ -25,6 +25,7 @@ Usage:  python extensions/anchoring/tests/run_checks.py
 Exit code 0 = every case behaves as expected, 1 = a case does not.
 """
 import base64
+import binascii
 import copy
 import hashlib
 import importlib.util
@@ -344,10 +345,13 @@ def signature_verifies(cp, policy):
             cp["signature"].get("algorithm") != "Ed25519" or strict_hex(key.get("public_key_hex")) is None:
         return False
     try:
+        made_over = cp["_to_be_signed"] if "_to_be_signed" in cp else checkpoint_signed_bytes(cp)  # a statement's
         Ed25519PublicKey.from_public_bytes(strict_hex(key["public_key_hex"])).verify(
-            base64.b64decode(cp["signature"]["value_b64"], validate=True), checkpoint_signed_bytes(cp))
+            base64.b64decode(cp["signature"]["value_b64"], validate=True), made_over)
         return True
-    except (Unencodable, InvalidSignature, ValueError):
+    except (Unencodable, InvalidSignature, ValueError, KeyError, TypeError, AttributeError):
+        # A held checkpoint with a field missing or not text (one from a source reaches this check without a schema
+        # check) gives no time, and the check goes on: it never stops on a document.
         return False
 
 
@@ -652,6 +656,361 @@ def compare(export, cp):
     return out
 
 
+# ---------------------------------------------------------------- a SCITT transparency service as a source
+
+COSE_SIGN1_TAG = 18                                        # RFC 9052: a tagged COSE_Sign1
+ALG_ED25519 = -19                                          # RFC 9864: Ed25519; -8 (EdDSA) is deprecated there
+HDR_ALG, HDR_CRIT, HDR_KID, HDR_CWT_CLAIMS = 1, 2, 4, 15    # RFC 9052 header labels; 15 is RFC 9597's CWT claims
+CWT_ISS, CWT_SUB = 1, 2                                    # RFC 8392 claim keys
+HDR_VDS, HDR_VDP = 395, 396                                # RFC 9942: the verifiable data structure, and its proofs
+VDS_RFC9162_SHA256 = 1                                     # RFC 9942: the RFC 9162 SHA-256 Merkle tree
+VDP_INCLUSION_PROOFS = -1                                  # RFC 9942: inclusion proofs, [tree-size, leaf-index, path]
+KNOWN_STATEMENT_LABELS = {HDR_ALG, HDR_KID, HDR_CWT_CLAIMS}
+MAX_CBOR_NESTING = 16  # far more than a statement, a receipt or a proof needs
+LOG_CONSISTENCY_NOT_CHECKED = ("one inclusion proof shows nothing about the log being append-only or shown to everyone "
+                               "alike (RFC 9942 gives consistency proofs for the first; RFC 9943 leaves the second to "
+                               "the service and to auditors); a consistency proof against a root the verifier holds "
+                               "is not in this version")
+
+
+class NotCbor(ValueError):
+    """Bytes this check does not read as CBOR, with the reason."""
+
+
+class Tagged:
+    def __init__(self, tag, value):
+        self.tag, self.value = tag, value
+
+
+def cbor_strict(raw):
+    """A strict reader for the CBOR a statement, a receipt and a proof use: definite lengths only; integers and lengths
+    in their shortest form; no map key named twice; map keys integers or text; tag 18 only; false, true and null the
+    only simple values; no floats; nothing after the item. Anything else raises NotCbor with the reason, as this
+    extension refuses a JSON member named twice."""
+    pos = 0
+
+    def take(n, what):
+        nonlocal pos
+        if pos + n > len(raw):
+            raise NotCbor(f"the item ends before {what}")
+        data = raw[pos:pos + n]
+        pos += n
+        return data
+
+    def head():
+        first = take(1, "the next item")[0]
+        major, info = first >> 5, first & 31
+        if major == 7:
+            if info in (20, 21, 22):
+                return major, info
+            raise NotCbor("a simple value or a float; none is used here")
+        if info < 24:
+            return major, info
+        if info > 27:
+            raise NotCbor("an indefinite length" if info == 31 else "reserved additional information")
+        size = 1 << (info - 24)
+        value = int.from_bytes(take(size, "an argument"), "big")
+        if value < (24, 256, 65536, 2 ** 32)[info - 24]:
+            raise NotCbor("an integer or a length not in its shortest form")
+        return major, value
+
+    def item(depth=0):
+        # Arrays, maps and tags nest; a statement, a receipt and a proof need a few levels, so deeper nesting is
+        # refused with the reason before it can exhaust the reader.
+        if depth > MAX_CBOR_NESTING:
+            raise NotCbor(f"items nested deeper than {MAX_CBOR_NESTING} levels")
+        major, arg = head()
+        if major == 0:
+            return arg
+        if major == 1:
+            return -1 - arg
+        if major in (2, 3):
+            data = take(arg, "the end of a string")
+            if major == 2:
+                return data
+            try:
+                return data.decode("utf-8")
+            except UnicodeDecodeError:
+                raise NotCbor("a text string that is not UTF-8") from None
+        if major == 4:
+            return [item(depth + 1) for _ in range(arg)]
+        if major == 5:
+            out = {}
+            for _ in range(arg):
+                k = item(depth + 1)
+                if not isinstance(k, (int, str)) or isinstance(k, bool):
+                    raise NotCbor("a map key that is not an integer or text")
+                if k in out:
+                    raise NotCbor(f"the map key {k!r} named twice")
+                out[k] = item(depth + 1)
+            return out
+        if major == 6:
+            if arg != COSE_SIGN1_TAG:
+                raise NotCbor(f"tag {arg}; this check reads tag 18 (COSE_Sign1) only")
+            return Tagged(arg, item(depth + 1))
+        return {20: False, 21: True, 22: None}[arg]
+
+    value = item()
+    if pos != len(raw):
+        raise NotCbor("bytes after the item")
+    return value
+
+
+def plain(value):
+    """A read item as plain Python, for comparison with another reader: a tag as ("tag", n, value)."""
+    if isinstance(value, Tagged):
+        return ("tag", value.tag, plain(value.value))
+    if hasattr(value, "tag") and hasattr(value, "value"):  # cbor2.CBORTag
+        return ("tag", value.tag, plain(value.value))
+    if isinstance(value, (list, tuple)):  # cbor2 reads an array inside a tag as a tuple
+        return [plain(x) for x in value]
+    if hasattr(value, "items"):  # a dict, or cbor2's immutable map
+        return {k: plain(x) for k, x in value.items()}
+    return value
+
+
+def cbor_head(major, n):
+    """The head of a CBOR item by the full rule (RFC 8949 section 3): the argument in the shortest of 0, 1, 2, 4 or 8
+    bytes."""
+    if n < 24:
+        return bytes([major << 5 | n])
+    for info, size in ((24, 1), (25, 2), (26, 4), (27, 8)):
+        if n < 1 << (8 * size):
+            return bytes([major << 5 | info]) + n.to_bytes(size, "big")
+    raise ValueError("a length beyond 2^64 - 1")
+
+
+def sig_structure(protected, payload):
+    """RFC 9052 section 4.4 for COSE_Sign1: ["Signature1", protected header bytes, external_aad (empty), payload],
+    written in the shortest definite form, whatever the lengths. These bytes start 84 6a "Signature1"; the shared
+    rule's bytes start "DPS-SIG" 00: no bytes are both, so one key may sign both formats."""
+    def bstr(data):
+        return cbor_head(2, len(data)) + data
+    return b"\x84" + b"\x6aSignature1" + bstr(protected) + b"\x40" + bstr(payload)
+
+
+def cose_sign1(raw):
+    """A tagged COSE_Sign1 read strictly: (protected bytes, protected map, unprotected map, payload or None,
+    signature). Raises NotCbor with the reason."""
+    item = cbor_strict(raw)
+    if not isinstance(item, Tagged):
+        raise NotCbor("not tagged 18 (COSE_Sign1)")
+    arr = item.value
+    if not (isinstance(arr, list) and len(arr) == 4):
+        raise NotCbor("COSE_Sign1 is an array of four items")
+    protected, unprotected, payload, signature = arr
+    if not isinstance(protected, bytes) or not isinstance(unprotected, dict) or not isinstance(signature, bytes) \
+            or not (payload is None or isinstance(payload, bytes)):
+        raise NotCbor("COSE_Sign1's items are not of their types")
+    pmap = cbor_strict(protected) if protected else {}
+    if not isinstance(pmap, dict):
+        raise NotCbor("the protected header is not a map")
+    return protected, pmap, unprotected, payload, signature
+
+
+def read_checkpoint_bytes(payload):
+    """The shared rule read back for a checkpoint: the prefix, then exactly eight length-prefixed fields: profile
+    (dps-anchoring), profile_version (0.2.0), the assertion type (checkpoint), key_ref, chain_id, count (8 bytes),
+    head_link (32 bytes) and checkpoint_time. Raises ValueError with the reason."""
+    if not payload.startswith(MAGIC):
+        raise ValueError("the payload does not start with the shared rule's prefix DPS-SIG 00")
+    pos, fields = len(MAGIC), []
+    while pos < len(payload):
+        if pos + 4 > len(payload):
+            raise ValueError("a length prefix is cut")
+        n = int.from_bytes(payload[pos:pos + 4], "big")
+        pos += 4
+        if pos + n > len(payload):
+            raise ValueError("a field is longer than the bytes left")
+        fields.append(payload[pos:pos + n])
+        pos += n
+    if len(fields) != 8:
+        raise ValueError(f"{len(fields)} fields; a checkpoint's signed bytes have eight")
+    profile, version, assertion, key_ref, chain, count, head, time = fields
+    if (profile, version, assertion) != (PROFILE.encode("utf-8"), VERSION.encode("utf-8"), b"checkpoint"):
+        raise ValueError("the first three fields are not dps-anchoring, 0.2.0 and checkpoint")
+    if len(count) != 8 or len(head) != 32:
+        raise ValueError("count is not 8 bytes, or head_link not 32")
+    n = int.from_bytes(count, "big")
+    if not 1 <= n <= MAX_COUNT:
+        raise ValueError(f"count is {n}; a checkpoint's count is from 1 to 2^53 - 1")
+    try:
+        return {"key_ref": key_ref.decode("utf-8"), "chain_id": chain.decode("utf-8"), "count": n,
+                "head_link": head.hex(), "checkpoint_time": time.decode("utf-8")}
+    except UnicodeDecodeError:
+        raise ValueError("a text field is not UTF-8") from None
+
+
+def read_statement(obtained):
+    """A SCITT carrier (statement_b64, and receipt_b64 where held) read into obtained: checkpoint, the checkpoint the
+    payload states, with the COSE signature as its signature and the Sig_structure kept for verifying; _scitt, what
+    the check needs besides. A statement that cannot be read leaves checkpoint None, with the reason."""
+    info = {"raw": None, "receipt_raw": None, "header": None, "error": None}
+    obtained["_scitt"], obtained["checkpoint"] = info, None
+    try:
+        info["raw"] = base64.b64decode(obtained["statement_b64"], validate=True)
+        if obtained.get("receipt_b64") is not None:
+            info["receipt_raw"] = base64.b64decode(obtained["receipt_b64"], validate=True)
+    except (binascii.Error, ValueError, TypeError):
+        info["error"] = "the statement or the receipt is not base64"
+        return obtained
+    try:
+        protected, pmap, unprotected, payload, signature = cose_sign1(info["raw"])
+        if payload is None:
+            raise NotCbor("the statement's payload is detached; a signed statement carries it")
+        fields = read_checkpoint_bytes(payload)
+        to_be_signed = sig_structure(protected, payload)
+    except (NotCbor, ValueError) as exc:
+        info["error"] = f"the statement cannot be read: {exc}"
+        return obtained
+    # The fields the payload states are held to the checkpoint schema's rules, as a checkpoint under the shared rule
+    # is: a chain_id of 1 to 256 characters, a time in exactly the signed form, and the rest. A payload outside them
+    # fails the signature with the reason, since its result could not be written in a valid report.
+    stated = {"profile": PROFILE, "profile_version": VERSION, "assertion": "checkpoint",
+              **{k: fields[k] for k in ("chain_id", "count", "head_link", "checkpoint_time")},
+              "signature": {"algorithm": "Ed25519", "key_ref": fields["key_ref"],
+                            "value_b64": base64.b64encode(signature).decode("ascii")}}
+    refused_by_schema = errors(checkpoint_validator(), stated)
+    if refused_by_schema:
+        info["payload_refused"] = f"the payload states a checkpoint the checkpoint schema refuses: {refused_by_schema[0]}"
+    kid, claims = pmap.get(HDR_KID), pmap.get(HDR_CWT_CLAIMS)
+    info["header"] = {"alg": pmap.get(HDR_ALG), "crit": pmap.get(HDR_CRIT),
+                      "kid": kid.decode("utf-8", "replace") if isinstance(kid, bytes) else None,
+                      "iss": claims.get(CWT_ISS) if isinstance(claims, dict) else None,
+                      "sub": claims.get(CWT_SUB) if isinstance(claims, dict) else None,
+                      "unknown_labels": sorted(str(k) for k in pmap if k not in KNOWN_STATEMENT_LABELS)}
+    obtained["checkpoint"] = {
+        "profile": PROFILE, "profile_version": VERSION, "assertion": "checkpoint", "format": "scitt",
+        **{k: fields[k] for k in ("chain_id", "count", "head_link", "checkpoint_time")},
+        "signature": {"algorithm": "Ed25519", "key_ref": info["header"]["kid"] or fields["key_ref"],
+                      "value_b64": base64.b64encode(signature).decode("ascii")},
+        "_payload_key_ref": fields["key_ref"], "_to_be_signed": to_be_signed}
+    return obtained
+
+
+_CHECKPOINT_VALIDATOR = []
+
+
+def checkpoint_validator():
+    """The checkpoint schema's validator, read once."""
+    if not _CHECKPOINT_VALIDATOR:
+        _CHECKPOINT_VALIDATOR.append(Draft202012Validator(strict_json(SCHEMAS["checkpoint"].read_bytes())))
+    return _CHECKPOINT_VALIDATOR[0]
+
+
+def statement_header_findings(cp, info, key):
+    """What the pinned header must say, checked before the signature: alg -19; no critical header this check does
+    not know; kid the payload's key_ref; iss the key's holder; sub the payload's chain. Returns (status, findings)."""
+    h = info["header"]
+    if h["alg"] != ALG_ED25519:
+        return "not_supported", [f"alg {h['alg']!r}; this check takes -19 (Ed25519, RFC 9864), under which -8 (EdDSA) "
+                                 "is deprecated"]
+    findings = []
+    if info.get("payload_refused"):
+        findings.append(info["payload_refused"])
+    if h["crit"] is not None:
+        findings.append(f"a critical header this check does not know: {h['crit']!r}")
+    if h["kid"] is None:
+        findings.append("the protected header names no kid")
+    elif h["kid"] != cp["_payload_key_ref"]:
+        findings.append(f"kid {h['kid']!r} is not the payload's key_ref {cp['_payload_key_ref']!r}")
+    if h["iss"] is None:
+        findings.append("the CWT claims name no iss (RFC 9943 requires it)")
+    elif h["iss"] != key["holder"]:
+        findings.append(f"iss {h['iss']!r} is not the holder of {key['key_ref']} in the trust policy")
+    if h["sub"] != cp["chain_id"]:
+        findings.append(f"sub {h['sub']!r} is not the payload's chain_id {cp['chain_id']!r}")
+    return ("failed" if findings else "verified"), findings
+
+
+def root_from_path(leaf, index, size, path):
+    """RFC 9162 section 2.1.3.2: the root an inclusion path leads to from a leaf hash, or None when the path does not
+    fit the tree size and index."""
+    fn, sn, r = index, size - 1, leaf
+    for p in path:
+        if sn == 0:
+            return None
+        if fn & 1 or fn == sn:
+            r = sha256(b"\x01" + p + r)
+            if not fn & 1:
+                while fn and not fn & 1:
+                    fn >>= 1
+                    sn >>= 1
+        else:
+            r = sha256(b"\x01" + r + p)
+        fn >>= 1
+        sn >>= 1
+    return r if sn == 0 else None
+
+
+def check_receipt(info, policy, allowed, where):
+    """The service's receipt (RFC 9942) for a statement: verified means exactly that the service signed that this
+    statement is in its log at the tree size named. allowed: the service keys the policy lists for the source (or,
+    beside the export, for a SCITT source of the chain). No time: a receipt states none."""
+    if info["receipt_raw"] is None:
+        return {"status": "unavailable", "findings": ["no receipt held: the service's registration of this statement "
+                                                      "is not shown"]}
+
+    def failed(why):
+        return {"status": "failed", "findings": [why]}
+    try:
+        protected, pmap, unprotected, payload, signature = cose_sign1(info["receipt_raw"])
+    except NotCbor as exc:
+        return failed(f"the receipt cannot be read: {exc}")
+    if payload is not None:
+        return failed("the receipt carries a payload; a receipt's payload is detached, the root the verifier computes")
+    if pmap.get(HDR_ALG) != ALG_ED25519:
+        return {"status": "not_supported", "findings": [f"alg {pmap.get(HDR_ALG)!r}; this check takes -19 (Ed25519)"]}
+    if pmap.get(HDR_VDS) != VDS_RFC9162_SHA256:
+        return {"status": "not_supported", "findings": [f"verifiable data structure {pmap.get(HDR_VDS)!r}; this check "
+                                                        "knows the RFC 9162 SHA-256 tree (1)"]}
+    kid = pmap.get(HDR_KID)
+    kid = kid.decode("utf-8", "replace") if isinstance(kid, bytes) else None
+    key = next((k for k in policy["keys"] if k["key_ref"] == kid), None)
+    if key is None:
+        return failed(f"the receipt's kid {kid!r} is not a key in the trust policy")
+    if key["role"] != "transparency_service":
+        return failed(f"{kid} is a key in role {key['role']}; only a transparency service's key signs a receipt")
+    if kid not in allowed:
+        return failed(f"the trust policy does not list {kid} as a service key " +
+                      ("for this source" if where == "configured_source" else "of a SCITT source for this chain"))
+    proofs = unprotected.get(HDR_VDP, {}).get(VDP_INCLUSION_PROOFS) if isinstance(unprotected.get(HDR_VDP), dict) \
+        else None
+    if not isinstance(proofs, list) or not proofs or not isinstance(proofs[0], bytes):
+        return failed("the receipt carries no inclusion proof (label 396, key -1)")
+    try:
+        proof = cbor_strict(proofs[0])
+    except NotCbor as exc:
+        return failed(f"the inclusion proof cannot be read: {exc}")
+    if not (isinstance(proof, list) and len(proof) == 3 and all(json_integer(x) for x in proof[:2])
+            and isinstance(proof[2], list) and all(isinstance(p, bytes) and len(p) == 32 for p in proof[2])):
+        return failed("the inclusion proof is not [tree-size, leaf-index, path of 32-byte hashes]")
+    size, index, path = proof
+    if size < 1 or not 0 <= index < size:
+        return failed(f"tree size {size} does not hold leaf {index}")
+    root = root_from_path(sha256(b"\x00" + info["raw"]), index, size, path)
+    if root is None:
+        return failed(f"a path of {len(path)} hashes does not fit leaf {index} of {size}")
+    if strict_hex(key["public_key_hex"]) is None:
+        return failed(f"the policy's public key for {kid} is not written as lowercase hex pairs and nothing else")
+    try:
+        Ed25519PublicKey.from_public_bytes(strict_hex(key["public_key_hex"])).verify(signature,
+                                                                                     sig_structure(protected, root))
+    except InvalidSignature:
+        return failed("the receipt's signature does not verify over the root the proof leads to from this statement: "
+                      "the proof is for another leaf, or the receipt is not the service's")
+    out = {"service_key_ref": kid, "tree_size": size, "leaf_index": index}
+    if key.get("revoked_at"):
+        out.update(status="unavailable", findings=[f"{kid} is revoked as {key.get('revocation_reason')}; a receipt "
+                                                   "states no time, so it cannot be shown made before that"])
+        return out
+    out.update(status="verified", findings=[f"{kid} signed that this statement is in its log at tree size {size} "
+                                            f"(leaf {index}); not that the log is append-only, nor that it showed "
+                                            "everyone the same log; a receipt states no registration time, and the "
+                                            "log's order need not be the order of issuance"])
+    return out
+
+
 def check_checkpoint(obtained, policy, export, chain_id, ts_results):
     """Reference check of one checkpoint, as the verifier obtained it (or could not)."""
     cp, where = obtained.get("checkpoint"), obtained["obtained_from"]
@@ -660,6 +1019,9 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         out["source_ref"] = obtained["source_ref"]
     if where == "beside_export" and "attachment_index" in obtained:  # its place in the attachment's checkpoints
         out["attachment_index"] = obtained["attachment_index"]
+    scitt = obtained.get("_scitt")  # a SCITT signed statement, read by read_statement; None for a plain checkpoint
+    if scitt:
+        out["format"] = "scitt"
     if cp is not None:
         out["checkpoint"] = {k: cp[k] for k in ("chain_id", "count", "head_link", "checkpoint_time") if k in cp}
     policy_result = check_policy(policy)
@@ -683,6 +1045,16 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
     else:
         independence = {"status": "verified"}
     out["independence"] = independence
+    if cp is None and scitt and scitt["error"]:
+        # A statement this check does not read: nothing in it is checked, and the reason is given.
+        out.update(status="failed", signature={"status": "failed", "findings": [scitt["error"]]},
+                   key_state={"status": "not_checked"}, comparison={"status": "not_checked"},
+                   receipt={"status": "not_checked", "findings": ["the statement is not read"]},
+                   log_consistency={"status": "not_checked", "findings": [LOG_CONSISTENCY_NOT_CHECKED]})
+        if beside:
+            out.update(prefix={"status": "not_checked", "findings": ["the statement is not read"]},
+                       freshness="not_established")
+        return out
     if cp is None:
         out.update(status="failed" if is_refused else "unavailable", signature={"status": "not_checked"},
                    key_state={"status": "not_checked"},
@@ -696,16 +1068,28 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         signature = {"status": "not_checked", "findings": ["the checkpoint carries no signature"]}
     elif is_refused:
         signature = {"key_ref": cp["signature"]["key_ref"], **refused(policy_result, "the signature")}
-    elif source is not None and source["kind"] != "witness":
-        signature = {"status": "not_supported", "findings": [f"{source['source_ref']} is a {source['kind']}; this "
-                                                             "version defines no format for it"]}
+    elif source is not None and not scitt and source.get("format") == "scitt":
+        signature = {"key_ref": cp["signature"]["key_ref"], "status": "failed",
+                     "findings": [f"{source['source_ref']} gives SCITT signed statements (format scitt); a checkpoint "
+                                  "signed under the shared rule is not what it gives"]}
+    elif source is not None and not scitt and source["kind"] != "witness":
+        signature = {"status": "not_supported", "findings": [f"{source['source_ref']} is a {source['kind']} that "
+                                                             "names no format; this check reads nothing from it"]}
+    elif source is not None and scitt and source["kind"] == "transparency_log" and source.get("format") != "scitt":
+        signature = {"status": "not_supported", "findings": [f"{source['source_ref']} is a transparency_log that "
+                                                             "names no format; this check reads nothing from it"]}
+    elif source is not None and scitt and source.get("format") != "scitt":
+        signature = {"key_ref": cp["signature"]["key_ref"], "status": "failed",
+                     "findings": [f"{source['source_ref']} is a {source['kind']}; a SCITT signed statement is not "
+                                  "what it gives"]}
     else:
         s = cp["signature"]
         signature = {"key_ref": s["key_ref"]}
         key = keys.get(s["key_ref"])
         # Beside the export, the key must be a witness key listed for a source the policy configures for the chain
         # the verifier checks: taken from its own configuration, never from the checkpoint's chain_id.
-        listed_for_chain = {r for src in policy["checkpoint_sources"] if src["kind"] == "witness"
+        listed_for_chain = {r for src in policy["checkpoint_sources"]
+                            if (src["kind"] == "witness" or src.get("format") == "scitt")
                             and chain_id in src["chain_ids"] for r in src.get("key_refs", [])}
         if key is None:
             signature.update(status="failed", findings=[f"{s['key_ref']} is not a key in the trust policy"])
@@ -725,15 +1109,22 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
             signature.update(status="failed", findings=[f"the policy's public key for {s['key_ref']} is not written "
                                                         "as lowercase hex pairs and nothing else"])
         else:
+            # A statement's pinned header is checked before its signature; a plain checkpoint has none.
+            header_status, header_findings = statement_header_findings(cp, scitt, key) if scitt else ("verified", [])
             public = Ed25519PublicKey.from_public_bytes(strict_hex(key["public_key_hex"]))
-            try:
-                public.verify(base64.b64decode(s["value_b64"], validate=True), checkpoint_signed_bytes(cp))
-                signature.update(status="verified", reference_source="trust_policy")
-            except Unencodable as exc:
-                signature.update(status="failed", findings=[f"the signed bytes cannot be built: {exc}"])
-            except InvalidSignature:
-                signature.update(status="failed", findings=["the signature does not verify over the checkpoint's "
-                                                            "signed bytes"])
+            if header_status != "verified":
+                signature.update(status=header_status, findings=header_findings)
+            else:
+                try:
+                    made_over = cp["_to_be_signed"] if scitt else checkpoint_signed_bytes(cp)
+                    public.verify(base64.b64decode(s["value_b64"], validate=True), made_over)
+                    signature.update(status="verified", reference_source="trust_policy")
+                except Unencodable as exc:
+                    signature.update(status="failed", findings=[f"the signed bytes cannot be built: {exc}"])
+                except InvalidSignature:
+                    signature.update(status="failed", findings=[
+                        "the signature does not verify over the statement's Sig_structure" if scitt else
+                        "the signature does not verify over the checkpoint's signed bytes"])
     out["signature"] = signature
 
     if is_refused:
@@ -745,7 +1136,24 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
     else:
         out["key_state"] = {"status": "not_checked"}
 
-    out["status"] = combine(independence["status"], signature["status"], out["key_state"]["status"])
+    if scitt:
+        # The service's receipt, its own dimension: checked whatever the witness's signature says, since it is the
+        # service's statement about these bytes. The log's consistency is not checked in this version.
+        if is_refused:
+            out["receipt"] = refused(policy_result, "the receipt")
+        elif source is not None and not beside and source.get("format") != "scitt":
+            out["receipt"] = {"status": "not_checked", "findings": [f"{source['source_ref']} is not a SCITT source; "
+                                                                    "its receipts are not read"]}
+        else:
+            allowed = (source.get("service_key_refs", []) if source is not None and not beside else
+                       sorted({r for src in policy["checkpoint_sources"] if src.get("format") == "scitt"
+                               and chain_id in src["chain_ids"] for r in src.get("service_key_refs", [])}))
+            out["receipt"] = check_receipt(scitt, policy, allowed, where)
+        out["log_consistency"] = {"status": "not_checked", "findings": [LOG_CONSISTENCY_NOT_CHECKED]}
+        out["status"] = combine(independence["status"], signature["status"], out["key_state"]["status"],
+                                out["receipt"]["status"])
+    else:
+        out["status"] = combine(independence["status"], signature["status"], out["key_state"]["status"])
     if beside:
         out["comparison"] = {"status": "not_checked", "findings": ["compared only with a verified independent "
                                                                    "checkpoint; the prefix is reported apart"]}
@@ -779,9 +1187,17 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
 
 def all_obtained(ctx):
     """The checkpoints the verifier obtained from its sources, then those carried beside the export, in that order."""
-    beside = [{"checkpoint": cp, "obtained_from": "beside_export", "attachment_index": i}
-              for i, cp in enumerate((ctx["attachment"] or {}).get("checkpoints", []))]
-    return list(ctx["obtained"]) + beside
+    beside = []
+    for i, item in enumerate((ctx["attachment"] or {}).get("checkpoints", [])):
+        o = {"obtained_from": "beside_export", "attachment_index": i}
+        if isinstance(item, dict) and item.get("format") == "scitt":  # a statement with its receipt, carried
+            o.update(statement_b64=item.get("statement_b64"), receipt_b64=item.get("receipt_b64"))
+            read_statement(o)
+        else:
+            o["checkpoint"] = item
+        beside.append(o)
+    sources = [read_statement(dict(o)) if "statement_b64" in o else o for o in ctx["obtained"]]
+    return sources + beside
 
 
 def with_conflicts(obtained, results):
@@ -886,6 +1302,17 @@ def read_with_documents(report, ctx):
             problems.append(f"checkpoint {i}: not reported as obtained from where it was")
         if "attachment_index" in r and r["attachment_index"] != ref.get("attachment_index"):
             problems.append(f"checkpoint {i}: attachment_index is not the checkpoint's place in the attachment")
+        if r.get("format") != ref.get("format"):
+            problems.append(f"checkpoint {i}: format not reported as the checkpoint was obtained")
+        rr, refr = r.get("receipt", {}), ref.get("receipt", {})
+        if rr.get("status") == "verified" and refr.get("status") != "verified":
+            problems.append(f"checkpoint {i}: receipt reported verified, but the reference check finds "
+                            f"{refr.get('status', 'none')}")
+        if rr.get("status") == refr.get("status") == "verified" and any(
+                rr.get(k) != refr.get(k) for k in ("service_key_ref", "tree_size", "leaf_index")):
+            problems.append(f"checkpoint {i}: the receipt's service key, tree size or leaf index not reported as found")
+        if r.get("log_consistency", {}).get("status") == "verified":
+            problems.append(f"checkpoint {i}: log_consistency reported verified; this version checks none")
         if ref.get("checkpoint") is not None and r.get("checkpoint") != ref["checkpoint"]:
             problems.append(f"checkpoint {i}: values not as the source gave them")
         for dim in CHECKPOINT_DIMENSIONS:
@@ -1130,6 +1557,106 @@ def vector_case(c, v):
                 and sha256(bytes.fromhex(n)).hex() == c["modulus_sha256"] and len(n) == c["bits"] // 4
                 and k["public_exponent_hex"] == c["public_exponent_hex"] and k["published_in"] == c["published_in"]):
             bad.append(c["key"])
+    elif kind == "scitt_cbor":
+        # The strict reader against cbor2, pinned: on every statement, receipt and proof it reads, the two agree and
+        # cbor2 writes the same bytes back; on the ones it refuses, it says why, where cbor2 reads some of them.
+        import cbor2
+        refused = {}
+        for name, st in v["scitt"]["statements"].items():
+            for member in ("statement_b64", "receipt_b64"):
+                if member not in st:
+                    continue
+                raw = base64.b64decode(st[member])
+                try:
+                    protected = cose_sign1(raw)[0]  # reads the item and its protected header, strictly
+                    mine = cbor_strict(raw)
+                except NotCbor as exc:
+                    refused[f"{name}/{member}"] = str(exc)
+                    continue
+                theirs = cbor2.loads(raw)
+                if plain(mine) != plain(theirs) or cbor2.dumps(theirs) != raw:
+                    bad.append(f"{name}/{member}: the strict reader and cbor2 disagree, or cbor2 writes other bytes")
+                if protected and (plain(cbor_strict(protected)) != plain(cbor2.loads(protected))
+                                  or cbor2.dumps(cbor2.loads(protected)) != protected):
+                    bad.append(f"{name}/{member}: the protected header read differently")
+                if member == "receipt_b64" and HDR_VDP in mine.value[1]:
+                    proof = mine.value[1][HDR_VDP][VDP_INCLUSION_PROOFS][0]
+                    if plain(cbor_strict(proof)) != plain(cbor2.loads(proof)):
+                        bad.append(f"{name}: the proof read differently")
+        for name, why in c["refused"].items():
+            if name not in refused:
+                bad.append(f"{name}: read, where the strict reader must refuse it")
+            elif why not in refused[name]:
+                bad.append(f"{name}: refused for {refused[name]!r}, not for {why!r}")
+        for name in refused:
+            if name not in c["refused"]:
+                bad.append(f"{name}: refused ({refused[name]}), where it must be read")
+    elif kind == "scitt_payload":
+        # Each statement's payload is the checkpoint's signed bytes under the shared rule, its key_ref field the kid,
+        # rebuilt from the values the vector states; and to_be_signed_hex is the Sig_structure over it.
+        for name, st in v["scitt"]["statements"].items():
+            cp = {**st["checkpoint"], "signature": {"key_ref": st["key_ref"]}}
+            if name in c.get("other_payload", []):
+                continue
+            if checkpoint_signed_bytes(cp).hex() != st["payload_hex"]:
+                bad.append(f"{name}: the payload is not the checkpoint's signed bytes")
+            protected = cbor_strict(base64.b64decode(st["statement_b64"])).value[0] \
+                if name not in c["refused"] else None
+            if protected is not None and sig_structure(protected, bytes.fromhex(st["payload_hex"])).hex() \
+                    != st["to_be_signed_hex"]:
+                bad.append(f"{name}: to_be_signed_hex is not the Sig_structure")
+    elif kind == "scitt_log":
+        # The log's leaf hashes from the statements' bytes, the root from the leaf hashes (RFC 9162), and each
+        # receipt's inclusion path leading from its statement's leaf to that root.
+        log = v["scitt"]["log"]
+        leaves = [sha256(b"\x00" + base64.b64decode(v["scitt"]["statements"][n]["statement_b64"])) for n in log["leaves"]]
+        if [h.hex() for h in leaves] != log["leaf_hashes_hex"]:
+            bad.append("the leaf hashes")
+
+        def root_of(hashes_):
+            if len(hashes_) == 1:
+                return hashes_[0]
+            k = 1 << (len(hashes_) - 1).bit_length() - 1
+            return sha256(b"\x01" + root_of(hashes_[:k]) + root_of(hashes_[k:]))
+        if root_of(leaves).hex() != log["root_hex"]:
+            bad.append("the root")
+        for name in c["reaching"]:
+            st = v["scitt"]["statements"][name]
+            receipt = cbor_strict(base64.b64decode(st["receipt_b64"]))
+            size, index, path = cbor_strict(receipt.value[1][HDR_VDP][VDP_INCLUSION_PROOFS][0])
+            root = root_from_path(sha256(b"\x00" + base64.b64decode(st["statement_b64"])), index, size, path)
+            if root is None or root.hex() != st["root_hex"] or (size, index) != (st["tree_size"], st["leaf_index"]):
+                bad.append(f"{name}: the path does not lead to the root")
+    elif kind == "format_prefixes":
+        # The two formats one witness key signs cannot collide: a Sig_structure starts with 84 6a "Signature1", the
+        # shared rule's bytes with "DPS-SIG" 00.
+        st = v["scitt"]["statements"][c["statement"]]
+        tbs, payload = bytes.fromhex(st["to_be_signed_hex"]), bytes.fromhex(st["payload_hex"])
+        if not tbs.startswith(b"\x84\x6aSignature1") or not payload.startswith(MAGIC) or tbs[:8] == MAGIC[:8]:
+            bad.append("the prefixes")
+    elif kind == "statement_signatures":
+        # Every statement's witness signature verifies over its Sig_structure with the test key named, but those the
+        # case lists; every receipt's over the root with the service key named.
+        for name, st in v["scitt"]["statements"].items():
+            if name in c["refused"]:
+                continue
+            raw = cbor_strict(base64.b64decode(st["statement_b64"])).value
+            key = Ed25519PublicKey.from_public_bytes(bytes.fromhex(v["test_keys"][st["signed_with"]]["public_key_hex"]))
+            try:
+                key.verify(raw[3], bytes.fromhex(st["to_be_signed_hex"]))
+                if name in c["not_verifying"]:
+                    bad.append(f"{name}: verifies, where it must not")
+            except InvalidSignature:
+                if name not in c["not_verifying"]:
+                    bad.append(f"{name}: the statement's signature")
+            if "receipt_b64" in st:
+                rc = cbor_strict(base64.b64decode(st["receipt_b64"])).value
+                skey = Ed25519PublicKey.from_public_bytes(
+                    bytes.fromhex(v["test_keys"][st["receipt_signed_with"]]["public_key_hex"]))
+                try:
+                    skey.verify(rc[3], bytes.fromhex(st["receipt_to_be_signed_hex"]))
+                except InvalidSignature:
+                    bad.append(f"{name}: the receipt's signature")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")
@@ -1207,8 +1734,18 @@ def timestamp_case(c, v, validators):
                                                                c.get("export_patch", []), v), "export")
     policy = schema_valid(validators["trust_policy"], apply_patch(v["trust_policy"], c.get("policy_patch", []), v),
                           "trust policy")
-    held = [schema_valid(validators["checkpoint"], v["checkpoints"][n]["checkpoint"], "held checkpoint")
-            for n in c.get("held_checkpoints", [])]
+    # A held checkpoint is a name in vectors.json, or {"from", "patch", "schema_valid": false}: a checkpoint obtained
+    # from a source reaches this check without a schema check, so a case may hold one that is not schema-valid.
+    held = []
+    for h in c.get("held_checkpoints", []):
+        if isinstance(h, str):
+            held.append(schema_valid(validators["checkpoint"], v["checkpoints"][h]["checkpoint"], "held checkpoint"))
+            continue
+        cp = resolve({"from": h["from"], "patch": h.get("patch", [])}, v)
+        found = errors(validators["checkpoint"], cp)
+        if h.get("schema_valid", True) != (not found):
+            raise ValueError("a held checkpoint's schema validity is not what the case says")
+        held.append(cp)
     r = reference(check_timestamp, ts, policy, export, chain_of(c, v), held)
     summary = {"status": r["status"], **r["checks"], "issuer_time": r["issuer_time"]["status"]}
     for k in ("existed_no_later_than", "gen_time"):
@@ -1233,8 +1770,13 @@ def checkpoint_case(c, v, validators):
     export = schema_valid(validators["pv_export"], v["exports"][c.get("export", "full")], "export")
     policy = schema_valid(validators["trust_policy"], apply_patch(v["trust_policy"], c.get("policy_patch", []), v),
                           "trust policy")
-    name = c["checkpoint"]
-    if name is None:
+    name = c.get("checkpoint")
+    carrier = None  # statement: a name under /scitt/statements, or {"from", "patch"}: a SCITT statement with its receipt
+    if "statement" in c:
+        carrier = resolve(c["statement"] if isinstance(c["statement"], dict)
+                          else f"/scitt/statements/{c['statement']}/carrier", v)
+        cp = None
+    elif name is None:
         cp = None
     elif name == "issuer_checkpoint":
         cp = copy.deepcopy(export["issuer_checkpoint"])
@@ -1250,11 +1792,18 @@ def checkpoint_case(c, v, validators):
     obtained = {"checkpoint": cp, "obtained_from": c.get("obtained_from", "configured_source")}
     if c.get("source_ref"):
         obtained["source_ref"] = c["source_ref"]
+    if carrier is not None:
+        obtained.update(copy.deepcopy(carrier))
+        read_statement(obtained)
     # Other checkpoints read at the same time (others): from a source or beside the export, by name in vectors.json.
     others = []
     for o in c.get("others", []):
         o = dict(o)
-        o["checkpoint"] = copy.deepcopy(v["checkpoints"][o.pop("checkpoint")]["checkpoint"])
+        if "statement" in o:
+            o.update(copy.deepcopy(v["scitt"]["statements"][o.pop("statement")]["carrier"]))
+            read_statement(o)
+        else:
+            o["checkpoint"] = copy.deepcopy(v["checkpoints"][o.pop("checkpoint")]["checkpoint"])
         others.append(o)
     all_cps = [obtained] + others
     held = [o["checkpoint"] for o in all_cps if o["checkpoint"] and "signature" in o["checkpoint"]]
@@ -1274,7 +1823,14 @@ def checkpoint_case(c, v, validators):
                 summary[f"prefix_{k}"] = r["prefix"].get(k)
     if "conflict" in c["expected"]:
         summary["conflict"] = any("cannot both hold" in f for f in r.get("findings", []))
+    if "receipt" in r:
+        summary["receipt"], summary["log_consistency"] = r["receipt"]["status"], r["log_consistency"]["status"]
+        for k in ("service_key_ref", "tree_size", "leaf_index"):
+            if k in c["expected"]:
+                summary[k] = r["receipt"].get(k)
     detail = [f"{d}: {f}" for d in CHECKPOINT_DIMENSIONS[1:] for f in r[d].get("findings", [])] + r.get("findings", [])
+    if "receipt" in r:
+        detail += [f"receipt: {f}" for f in r["receipt"].get("findings", [])]
     if "prefix" in r:
         detail += [f"prefix: {f}" for f in r["prefix"].get("findings", [])]
     return summary, "; ".join(detail)
@@ -1289,6 +1845,8 @@ def expected_checkpoint(c):
     if c.get("obtained_from") == "beside_export":
         full.update(status="failed", independence="failed", comparison="not_checked", prefix="verified",
                     freshness="not_established")
+    if "statement" in c:  # a SCITT statement: its receipt verified, the log's consistency not checked
+        full.update(receipt="verified", log_consistency="not_checked")
     full.update(c["expected"])
     if full["key_state"] != "verified":
         full.pop("time_basis", None)
@@ -1303,6 +1861,10 @@ def pairing_case(c, v, validators):
     obtained = []
     for o in c.get("checkpoints", base["checkpoints"]):
         o = dict(o)
+        if "statement" in o:  # a SCITT statement with its receipt, from a source: read by all_obtained
+            o.update(copy.deepcopy(v["scitt"]["statements"][o.pop("statement")]["carrier"]))
+            obtained.append(o)
+            continue
         name = o.pop("checkpoint")
         if name == "issuer_checkpoint":
             o["checkpoint"] = copy.deepcopy(export["issuer_checkpoint"])
