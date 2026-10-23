@@ -201,7 +201,10 @@ def raw_public(key):
 ED25519_NAMES = ("witness-a-1", "witness-b-1", "witness-b-2", "witness-c-1", "witness-d-1", "witness-x-1",
                  "issuer-seal-1",
                  # The test transparency service's keys (role transparency_service), and one the policy does not list.
-                 "service-s-1", "service-s-2", "service-z-1")
+                 "service-s-1", "service-s-2", "service-z-1",
+                 # The witnesses' statement keys: a key of their own for SCITT statements (RFC 9943 section 9.4).
+                 "witness-a-scitt-1", "witness-b-scitt-1")
+WA, WB = "witness-a-scitt-1", "witness-b-scitt-1"  # the statement keys of witnesses A and B
 P256_NAMES = ("tsa-example-1", "tsa-example-2", "attacker-1")
 
 
@@ -728,9 +731,13 @@ def build():
         "2027-12-31T23:59:59Z")
     key("service-s-2", "service-s-2", "Example log S (test only)", "transparency_service", "2026-06-01T00:00:00Z",
         "2027-12-31T23:59:59Z")
+    # Each witness signs its statements with a key of its own, never the one it signs checkpoints with under the
+    # shared rule (RFC 9943 section 9.4: one key, one purpose).
+    key(WA, WA, "Example witness A (test only)", "witness", "2026-09-01T00:00:00Z", "2027-08-31T23:59:59Z")
+    key(WB, WB, "Example witness B (test only)", "witness", "2026-09-30T00:00:00Z", "2027-09-29T23:59:59Z")
     policy["checkpoint_sources"].append({"source_ref": "log-s", "kind": "transparency_log", "format": "scitt",
                                          "holder": "Example log S (test only)", "chain_ids": [CHAIN],
-                                         "key_refs": ["witness-a-1", "witness-b-2"],
+                                         "key_refs": [WA, WB],
                                          "service_key_refs": ["service-s-1", "service-s-2"]})
 
     # ---- SCITT signed statements, registered in a small RFC 9162 log kept by the test service
@@ -766,57 +773,62 @@ def build():
     def tagged(protected, payload, signature):
         return cbor2.dumps(cbor2.CBORTag(COSE_SIGN1_TAG, [protected, {}, payload, signature]))
 
-    a_claims = cbor2.dumps({CWT_ISS: holder_of["witness-a-1"], CWT_SUB: CHAIN})
-    statement("st_a", "witness-a-1's statement of cp_a: the payload is cp_a's signed bytes under the shared rule, the "
-              "header pinned (alg -19, kid witness-a-1, CWT claims iss the holder and sub the chain)", "witness-a-1",
+    a_claims = cbor2.dumps({CWT_ISS: holder_of[WA], CWT_SUB: CHAIN})
+    statement("st_a", "witness-a-scitt-1's statement of cp_a: the payload is cp_a's signed bytes under the shared rule, "
+              "the header pinned (alg -19, kid witness-a-scitt-1, CWT claims iss the holder and sub the chain)", WA,
               "cp_a")
-    statement("st_b2", "witness-b-2's statement of cp_b2", "witness-b-2", "cp_b2")
-    statement("st_a_count_4", "witness-a-1's statement of cp_a_count_4, four entries", "witness-a-1", "cp_a_count_4")
-    statement("st_a_count_2", "witness-a-1's statement of cp_a_count_2, a filler leaf of the log", "witness-a-1",
+    statement("st_b2", "witness-b-scitt-1's statement of cp_b2", WB, "cp_b2")
+    statement("st_a_count_4", "witness-a-scitt-1's statement of cp_a_count_4, four entries", WA, "cp_a_count_4")
+    statement("st_a_count_2", "witness-a-scitt-1's statement of cp_a_count_2, a filler leaf of the log", WA,
               "cp_a_count_2")
-    statement("st_a_chain_2", "witness-a-1's statement of cp_a_chain_2: for chain 2, which log-s is not configured "
-              "for", "witness-a-1", "cp_a_chain_2")
+    statement("st_a_chain_2", "witness-a-scitt-1's statement of cp_a_chain_2: for chain 2, which log-s is not configured "
+              "for", WA, "cp_a_chain_2")
     statement("st_by_service", "the service's own key signs a statement of cp_a's fields (kid service-s-1): not a "
               "witness", "service-s-1", "cp_a")
-    statement("st_a_sub_other", "st_a with sub naming chain 2 while the payload names chain 1", "witness-a-1", "cp_a",
+    statement("st_a_sub_other", "st_a with sub naming chain 2 while the payload names chain 1", WA, "cp_a",
               sub=CHAIN_2)
-    statement("st_a_no_iss", "st_a with no iss claim", "witness-a-1", "cp_a", no_iss=True)
-    statement("st_a_iss_other", "st_a with iss naming someone other than the key's holder", "witness-a-1", "cp_a",
+    statement("st_a_no_iss", "st_a with no iss claim", WA, "cp_a", no_iss=True)
+    statement("st_a_iss_other", "st_a with iss naming someone other than the key's holder", WA, "cp_a",
               iss="Someone else (test only)")
-    statement("st_a_alg_8", "st_a with alg -8 (EdDSA), which RFC 9864 deprecates", "witness-a-1", "cp_a", alg=-8)
-    statement("st_a_crit", "st_a with a critical header this check does not know", "witness-a-1", "cp_a",
+    statement("st_a_alg_8", "st_a with alg -8 (EdDSA), which RFC 9864 deprecates", WA, "cp_a", alg=-8)
+    statement("st_a_crit", "st_a with a critical header this check does not know", WA, "cp_a",
               extra={HDR_CRIT: ["urn:example:x"], "urn:example:x": 1})
-    statement("st_a_kid_unknown", "st_a signed by witness-a-1 under a kid the policy does not list", "witness-a-1",
+    statement("st_a_kid_unknown", "st_a signed by witness-a-scitt-1 under a kid the policy does not list", WA,
               "cp_a", kid="witness-z-1")
     statement("st_a_map_payload", "st_a with its payload written as a CBOR map of the fields, not the signed bytes",
-              "witness-a-1", "cp_a", payload=cbor2.dumps({"chain_id": CHAIN, "count": 3, "head_link": links["L2"],
+              WA, "cp_a", payload=cbor2.dumps({"chain_id": CHAIN, "count": 3, "head_link": links["L2"],
                                                          "checkpoint_time": "2026-09-27T12:00:00Z"}))
     statement("st_a_dup_label", "st_a with the protected header naming label 1 (alg) twice: not read",
-              "witness-a-1", "cp_a",
+              WA, "cp_a",
               protected=b"\xa4" + cbor2.dumps(1) + cbor2.dumps(ALG_ED25519) + cbor2.dumps(1) + cbor2.dumps(ALG_ED25519)
-              + cbor2.dumps(4) + cbor2.dumps(b"witness-a-1") + cbor2.dumps(15) + a_claims)
+              + cbor2.dumps(4) + cbor2.dumps(WA.encode("utf-8")) + cbor2.dumps(15) + a_claims)
     statement("st_a_long_int", "st_a with alg written as 39 00 12 (-19 in three bytes, not its shortest form 32): "
-              "not read", "witness-a-1", "cp_a",
-              protected=b"\xa3" + cbor2.dumps(1) + b"\x39\x00\x12" + cbor2.dumps(4) + cbor2.dumps(b"witness-a-1")
+              "not read", WA, "cp_a",
+              protected=b"\xa3" + cbor2.dumps(1) + b"\x39\x00\x12" + cbor2.dumps(4) + cbor2.dumps(WA.encode("utf-8"))
               + cbor2.dumps(15) + a_claims)
-    statement("st_a_indefinite", "st_a written as an indefinite-length array: not read", "witness-a-1", "cp_a",
+    statement("st_a_indefinite", "st_a written as an indefinite-length array: not read", WA, "cp_a",
               rewrite=lambda raw, p, pl, s: b"\xd2\x9f" + cbor2.dumps(p) + b"\xa0" + cbor2.dumps(pl) + cbor2.dumps(s)
               + b"\xff")
-    statement("st_a_trailing", "st_a followed by one more byte: not read", "witness-a-1", "cp_a",
+    statement("st_a_trailing", "st_a followed by one more byte: not read", WA, "cp_a",
               rewrite=lambda raw, p, pl, s: raw + b"\x00")
-    statement("st_a_untagged", "st_a without the COSE_Sign1 tag: not read", "witness-a-1", "cp_a",
+    statement("st_a_untagged", "st_a without the COSE_Sign1 tag: not read", WA, "cp_a",
               rewrite=lambda raw, p, pl, s: cbor2.dumps([p, {}, pl, s]))
-    statement("st_a_dps_value", "st_a with cp_a's signature under the shared rule in place of the COSE signature: the "
-              "two formats' bytes differ, so it does not verify", "witness-a-1", "cp_a",
+    statement("st_a_dps_value", "witness-a-1's statement of cp_a with cp_a's own signature under the shared rule in place "
+              "of the COSE signature: same key, same fields, but the two formats' bytes differ, so it does not verify",
+              "witness-a-1", "cp_a",
               rewrite=lambda raw, p, pl, s: tagged(p, pl, base64.b64decode(
                   checkpoints["cp_a"]["checkpoint"]["signature"]["value_b64"])))
-    # The reverse: a plain checkpoint carrying st_a's COSE signature as its value.
+    # A statement made with witness-a-1, the key that signs checkpoints under the shared rule: one key for two purposes,
+    # which the check refuses (K133); its COSE signature also serves the reverse direction below.
+    statement("st_a_shared_key", "witness-a-1's statement of cp_a: made with the key witness-a-1 signs checkpoints "
+              "with under the shared rule", "witness-a-1", "cp_a")
+    # The reverse: a plain checkpoint carrying a COSE signature by its own key over its own fields.
     reverse = copy.deepcopy(checkpoints["cp_a"])
-    reverse["about"] = "cp_a with st_a's COSE signature as its signature value: made over the Sig_structure, not the " \
-                       "shared rule's bytes, so it does not verify"
+    reverse["about"] = "cp_a with st_a_shared_key's COSE signature as its signature value: same key, same fields, " \
+                       "made over the Sig_structure, not the shared rule's bytes, so it does not verify"
     reverse["checkpoint"]["signature"]["value_b64"] = b64(cbor2.loads(
-        base64.b64decode(statements["st_a"]["statement_b64"])).value[3])
-    reverse["signature_made_over_hex"] = statements["st_a"]["to_be_signed_hex"]
+        base64.b64decode(statements["st_a_shared_key"]["statement_b64"])).value[3])
+    reverse["signature_made_over_hex"] = statements["st_a_shared_key"]["to_be_signed_hex"]
     checkpoints["cp_a_cose_value"] = reverse
 
     # The log: five leaves, each a statement's bytes as registered; st_a is leaf 1, st_b2 leaf 2, st_a_count_4 leaf 4.
@@ -874,23 +886,26 @@ def build():
     receipt("st_a_receipt_one_leaf", "st_a", "st_a with a proof [1, 1, []] and a receipt signed over st_a's own leaf "
             "hash, the root of a one-leaf log: a leaf index equal to the tree size, with a path that otherwise fits",
             "service-s-1", proof=[1, 1, []], signed_root=leaf_hash(base64.b64decode(statements["st_a"]["statement_b64"])))
-    # Payloads stating a checkpoint_time in another form than the one signed as text: signed by witness-a-1 over
+    # Payloads stating a checkpoint_time in another form than the one signed as text: signed by witness-a-scitt-1 over
     # cp_a's other fields. The checkpoint schema refuses these times, so the check fails the signature.
     for name, other_time in (("st_a_time_offset", "2026-09-27T17:00:00+05:00"),
                              ("st_a_time_fraction", "2026-09-27T12:00:00.000+00:00"),
                              ("st_a_time_basic", "20260927T120000Z")):
         statement(name, f"st_a whose payload states checkpoint_time {other_time}, a form the checkpoint schema "
-                  "refuses", "witness-a-1", "cp_a",
+                  "refuses", WA, "cp_a",
                   payload=signed_bytes(checkpoint_fields({**checkpoints["cp_a"]["checkpoint"],
-                                                          "checkpoint_time": other_time}, key_ref="witness-a-1")))
+                                                          "checkpoint_time": other_time}, key_ref=WA)))
+    statement("st_a_chain_empty", "st_a whose payload states an empty chain_id, which the checkpoint schema refuses",
+              WA, "cp_a", payload=signed_bytes(checkpoint_fields({**checkpoints["cp_a"]["checkpoint"], "chain_id": ""},
+                                                                 key_ref=WA)))
     # Carriers too large or too deep to keep as full statement vectors: each is only what a verifier would hold.
     deep = b"\xd2" + b"\x81" * 990 + b"\x00"
-    long_iss, _ = cose_sign1(ed["witness-a-1"], protected_header("witness-a-1", "x" * 70000, CHAIN), {},
-                             signed_bytes(checkpoint_fields(checkpoints["cp_a"]["checkpoint"], key_ref="witness-a-1")))
+    long_iss, _ = cose_sign1(ed[WA], protected_header(WA, "x" * 70000, CHAIN), {},
+                             signed_bytes(checkpoint_fields(checkpoints["cp_a"]["checkpoint"], key_ref=WA)))
     carriers = {
         "deep_nesting": {"about": "a tagged item nesting 990 one-item arrays: well formed, and far deeper than any "
                                   "statement", "format": "scitt", "statement_b64": b64(deep)},
-        "long_iss": {"about": "witness-a-1's statement of cp_a with an iss of 70,000 characters, so that the "
+        "long_iss": {"about": "witness-a-scitt-1's statement of cp_a with an iss of 70,000 characters, so that the "
                               "protected header and its Sig_structure length need four bytes",
                      "format": "scitt", "statement_b64": b64(long_iss)},
     }

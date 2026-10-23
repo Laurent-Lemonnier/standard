@@ -873,6 +873,9 @@ def read_statement(obtained):
     refused_by_schema = errors(checkpoint_validator(), stated)
     if refused_by_schema:
         info["payload_refused"] = f"the payload states a checkpoint the checkpoint schema refuses: {refused_by_schema[0]}"
+        rules = strict_json(SCHEMAS["checkpoint"].read_bytes())["properties"]
+        info["refused_fields"] = sorted(k for k in ("chain_id", "count", "head_link", "checkpoint_time")
+                                        if list(Draft202012Validator(rules[k]).iter_errors(stated[k])))
     kid, claims = pmap.get(HDR_KID), pmap.get(HDR_CWT_CLAIMS)
     info["header"] = {"alg": pmap.get(HDR_ALG), "crit": pmap.get(HDR_CRIT),
                       "kid": kid.decode("utf-8", "replace") if isinstance(kid, bytes) else None,
@@ -896,6 +899,13 @@ def checkpoint_validator():
     if not _CHECKPOINT_VALIDATOR:
         _CHECKPOINT_VALIDATOR.append(Draft202012Validator(strict_json(SCHEMAS["checkpoint"].read_bytes())))
     return _CHECKPOINT_VALIDATOR[0]
+
+
+def checkpoint_result_validator():
+    """The report schema's checkpoint result, as a validator of one result."""
+    report = strict_json(SCHEMAS["report"].read_bytes())
+    return Draft202012Validator({"$schema": report["$schema"], "$defs": report["$defs"],
+                                 "$ref": "#/$defs/checkpoint_result"})
 
 
 def statement_header_findings(cp, info, key):
@@ -1023,7 +1033,11 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
     if scitt:
         out["format"] = "scitt"
     if cp is not None:
-        out["checkpoint"] = {k: cp[k] for k in ("chain_id", "count", "head_link", "checkpoint_time") if k in cp}
+        # A statement's payload field that the checkpoint schema refuses is left out: the result reports only values a
+        # report can carry (its reason is under signature).
+        left_out = scitt.get("refused_fields", ()) if scitt else ()
+        out["checkpoint"] = {k: cp[k] for k in ("chain_id", "count", "head_link", "checkpoint_time")
+                             if k in cp and k not in left_out}
     policy_result = check_policy(policy)
     is_refused = policy_result["status"] != "verified"
     source = next((s for s in policy["checkpoint_sources"] if s["source_ref"] == obtained.get("source_ref")), None)
@@ -1091,6 +1105,10 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         listed_for_chain = {r for src in policy["checkpoint_sources"]
                             if (src["kind"] == "witness" or src.get("format") == "scitt")
                             and chain_id in src["chain_ids"] for r in src.get("key_refs", [])}
+        shared_rule_keys = {r for src in policy["checkpoint_sources"] if src["kind"] == "witness"
+                            for r in src.get("key_refs", [])}
+        statement_keys = {r for src in policy["checkpoint_sources"] if src.get("format") == "scitt"
+                          for r in src.get("key_refs", [])}
         if key is None:
             signature.update(status="failed", findings=[f"{s['key_ref']} is not a key in the trust policy"])
         elif beside and s["key_ref"] not in listed_for_chain:
@@ -1102,6 +1120,12 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         elif key["role"] != "witness":
             signature.update(status="failed", findings=[f"{s['key_ref']} is a key in role {key['role']}; only a "
                                                         "witness key signs a checkpoint"])
+        elif s["key_ref"] in (shared_rule_keys if scitt else statement_keys):
+            # One key, one purpose (RFC 9943 section 9.4): a key the policy lists both for checkpoints under the shared
+            # rule and for SCITT statements is refused for either.
+            signature.update(status="failed", findings=[
+                f"the trust policy lists {s['key_ref']} both for checkpoints under the shared rule and for SCITT "
+                "statements; a witness signs its statements with a key of their own (RFC 9943 section 9.4)"])
         elif s["algorithm"] != "Ed25519" or key["algorithm"] != "Ed25519":
             signature.update(status="not_supported", findings=[f"this check supports Ed25519; the checkpoint uses "
                                                                f"{s['algorithm']}"])
@@ -1823,6 +1847,10 @@ def checkpoint_case(c, v, validators):
                 summary[f"prefix_{k}"] = r["prefix"].get(k)
     if "conflict" in c["expected"]:
         summary["conflict"] = any("cannot both hold" in f for f in r.get("findings", []))
+    if "result_schema_valid" in c["expected"]:
+        # The result as a report carries it: valid against the report schema's checkpoint result.
+        written = {"checkpoint_index": 0, **{k: x for k, x in r.items() if not k.startswith("_")}}
+        summary["result_schema_valid"] = not errors(checkpoint_result_validator(), written)
     if "receipt" in r:
         summary["receipt"], summary["log_consistency"] = r["receipt"]["status"], r["log_consistency"]["status"]
         for k in ("service_key_ref", "tree_size", "leaf_index"):
