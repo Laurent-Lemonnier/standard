@@ -1230,6 +1230,10 @@ def build():
     items, _ = ots_path(d_r0, [("append", b"\x00" * 5000), ("sha256",)], bitcoin(800001))
     ots("seal_r0_long_argument", "R0's seal with an append argument of 5,000 bytes, over the limit of 4,096", subj_r0,
         ots_proof(d_r0, ots_tree(items)))
+    # An append whose argument's length is written as a 10-byte varint, in its shortest form (2^63): over the
+    # nine-byte limit before any length limit is reached.
+    ots("seal_r0_varint_10_bytes", "R0's seal with an append argument's length written as a 10-byte varint (2^63)",
+        subj_r0, ots_proof(d_r0, b"\xf0" + ots_varuint(2 ** 63) + b"\x00" * 16))
     ots("seal_r0_same_operation_twice", "R0's seal with sha256 written twice at one point", subj_r0,
         ots_proof(d_r0, ots_tree([("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800001))]),
                                   ("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800002))])])))

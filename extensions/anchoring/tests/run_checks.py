@@ -1138,15 +1138,25 @@ def ots_attestations(tree, digest):
         node, msg = stack.pop()
         for tag8, payload in node["atts"]:
             if tag8 == OTS_BITCOIN:
-                p, height, shift = 0, 0, 0
-                for p in range(len(payload)):
-                    height |= (payload[p] & 0x7f) << shift
-                    shift += 7
-                    if not payload[p] & 0x80:
-                        break
-                ok = (len(payload) <= OTS_MAX_VARUINT_BYTES and p == len(payload) - 1
-                      and not payload[p] & 0x80 and not (p > 0 and payload[p] == 0))
-                out.append(("bitcoin", height if ok else None, msg))
+                # The height: one varint filling the payload, of at most OTS_MAX_VARUINT_BYTES bytes, in its shortest
+                # form, and at most OTS_MAX_HEIGHT. Each rule gives its own reason.
+                if len(payload) > OTS_MAX_VARUINT_BYTES:
+                    out.append(("bitcoin_refused", f"a Bitcoin attestation's height is a varint of {len(payload)} "
+                                f"bytes, over the limit of {OTS_MAX_VARUINT_BYTES}", msg))
+                    continue
+                ends = [p for p, b in enumerate(payload) if not b & 0x80]
+                if not payload or ends != [len(payload) - 1]:
+                    out.append(("bitcoin_refused", "a Bitcoin attestation's payload is not exactly one varint", msg))
+                    continue
+                if len(payload) > 1 and payload[-1] == 0:
+                    out.append(("bitcoin_refused", "a Bitcoin attestation's height is not in its shortest form", msg))
+                    continue
+                height = sum((b & 0x7f) << (7 * p) for p, b in enumerate(payload))
+                if height > OTS_MAX_HEIGHT:
+                    out.append(("bitcoin_refused", f"a Bitcoin attestation's height {height} is beyond what a report "
+                                "can carry (2^53 - 1)", msg))
+                    continue
+                out.append(("bitcoin", height, msg))
             elif tag8 == OTS_PENDING:
                 out.append(("pending", payload, msg))
             else:
@@ -1189,10 +1199,10 @@ def check_ots(ts, policy, out, subject_check, value, headers):
         if kind == "unknown":
             findings.append(f"an attestation of an unknown kind ({val}) is skipped")
     bitcoin = [(h, msg) for kind, h, msg in atts if kind == "bitcoin"]
-    if any(h is None or h > OTS_MAX_HEIGHT for h, _ in bitcoin):
+    refused = [why for kind, why, _ in atts if kind == "bitcoin_refused"]
+    if refused:
         checks["attestation"] = "failed"
-        findings.append("a Bitcoin attestation names a height that is not a varint in its shortest form of at most "
-                        f"{OTS_MAX_VARUINT_BYTES} bytes, or beyond what a report can carry")
+        findings.extend(refused)
     elif not bitcoin:
         pending = any(kind == "pending" for kind, _, _ in atts)
         checks["attestation"] = "unavailable" if pending else "failed"
@@ -1565,15 +1575,17 @@ def read_with_documents(report, ctx):
                     ref.get("block"), ref.get("miner_stated_time")):
                 problems.append(f"timestamp {i}: the block or the miner's stated time not reported as found")
             continue
-        if r["subject"] != shown_subject(stated[i]["subject"]) or r["tsa_ref"] != stated[i]["tsa_ref"]:
+        # Read with .get: a result or a timestamp of the other format names no authority, and the reader goes on.
+        if r["subject"] != shown_subject(stated[i]["subject"]) or r.get("tsa_ref") != stated[i].get("tsa_ref"):
             problems.append(f"timestamp {i}: subject or tsa_ref not as the attachment states them")
         if r["status"] == "verified" and ref["status"] != "verified":
             problems.append(f"timestamp {i}: reported verified, but the reference check finds {ref['status']}")
         for k in CHECKS:
-            if r["checks"][k] == "verified" and ref["checks"][k] != "verified":
-                problems.append(f"timestamp {i}: {k} reported verified, but it is {ref['checks'][k]}")
+            if r["checks"].get(k) == "verified" and ref["checks"].get(k) != "verified":
+                problems.append(f"timestamp {i}: {k} reported verified, but it is {ref['checks'].get(k)}")
         if r["status"] == ref["status"] == "verified":
-            if (r["gen_time"], r["existed_no_later_than"]) != (ref["gen_time"], ref["existed_no_later_than"]):
+            if (r.get("gen_time"), r.get("existed_no_later_than")) != (ref.get("gen_time"),
+                                                                       ref.get("existed_no_later_than")):
                 problems.append(f"timestamp {i}: gen_time or existed_no_later_than not as the token gives them")
         it, ri = r["issuer_time"], ref["issuer_time"]
         if it["status"] == "verified" and ri["status"] != "verified":
@@ -2081,6 +2093,8 @@ def timestamp_case(c, v, validators):
         if "result_schema_valid" in c["expected"]:
             written = {"timestamp_index": 0, **{k: x for k, x in r.items() if not k.startswith("_")}}
             summary["result_schema_valid"] = not errors(ots_result_validator(), written)
+    if "finding" in c["expected"]:  # a phrase the findings must hold: the reason, where several rules could refuse
+        summary["finding"] = c["expected"]["finding"] if c["expected"]["finding"] in " ".join(r["findings"]) else None
     if "consistency" in c["expected"]:
         summary["consistency"] = r["issuer_time"].get("consistency")
     detail = r["findings"] + r["issuer_time"].get("findings", [])
