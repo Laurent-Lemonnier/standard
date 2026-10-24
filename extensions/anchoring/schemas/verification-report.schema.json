@@ -43,7 +43,7 @@
       "minimum": 0,
       "description": "The number of timestamps in the attachment. The report has one result for each, and each timestamp_index from 0 to this count minus 1 appears once. JSON Schema cannot compare two documents: a reader holding both checks it."
     },
-    "timestamps": {"type": "array", "items": {"$ref": "#/$defs/timestamp_result"}},
+    "timestamps": {"type": "array", "items": {"oneOf": [{"$ref": "#/$defs/timestamp_result"}, {"$ref": "#/$defs/ots_timestamp_result"}]}},
     "checkpoint_count": {
       "type": "integer",
       "minimum": 0,
@@ -69,6 +69,47 @@
     }
   ],
   "$defs": {
+    "ots_timestamp_result": {
+      "description": "An OpenTimestamps proof as one dimension. What a verified proof shows: the subject's bytes existed before the block it names was mined. It gives no time that holds: the header's time is the miner's statement, reported as miner_stated_time, never as existed_no_later_than; so no issuer's time is compared with it and no key state rests on it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestamp_index", "subject", "format", "status", "checks", "issuer_time"],
+      "properties": {
+        "timestamp_index": {"type": "integer", "minimum": 0},
+        "subject": {"$ref": "#/$defs/timestamp_result/properties/subject"},
+        "format": {"const": "opentimestamps"},
+        "status": {"$ref": "#/$defs/status", "description": "Verified only when every check below is."},
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["proof", "subject_bytes", "operations", "attestation", "header"],
+          "properties": {
+            "proof": {"$ref": "#/$defs/status", "description": "The proof read strictly: its magic and version, varints in their shortest form, within the limits, nothing after it."},
+            "subject_bytes": {"$ref": "#/$defs/status", "description": "The subject's bytes are the seal, link or signature value it names, and the proof starts from their SHA-256."},
+            "operations": {"$ref": "#/$defs/status", "description": "Every operation on the way is sha256, append or prepend."},
+            "attestation": {"$ref": "#/$defs/status", "description": "A Bitcoin block header attestation is reached; a pending one only is unavailable."},
+            "header": {"$ref": "#/$defs/status", "description": "The header of that block, from the verifier's source, holds the proof's result as its Merkle root, in the header's own byte order."}
+          }
+        },
+        "block": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["height", "hash_hex", "header_source_ref"],
+          "properties": {
+            "height": {"type": "integer", "minimum": 0, "maximum": 9007199254740991},
+            "hash_hex": {"$ref": "#/$defs/sha256_hex", "description": "The block's hash, as explorers show it."},
+            "header_source_ref": {"$ref": "#/$defs/ref", "description": "The policy's source the header came from."}
+          },
+          "description": "The block the proof leads to: what a verified proof shows."
+        },
+        "miner_stated_time": {"$ref": "#/$defs/instant", "description": "The block header's time, as its miner states it. Consensus only holds it above the median of the previous eleven blocks; it is not a time the bytes existed by."},
+        "issuer_time": {"type": "object", "additionalProperties": false, "required": ["status"], "properties": {"status": {"const": "not_checked"}, "findings": {"$ref": "#/$defs/findings"}}},
+        "findings": {"$ref": "#/$defs/findings"}
+      },
+      "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
+      "then": {"required": ["block", "miner_stated_time"], "properties": {"checks": {"properties": {"proof": {"const": "verified"}, "subject_bytes": {"const": "verified"}, "operations": {"const": "verified"}, "attestation": {"const": "verified"}, "header": {"const": "verified"}}}}},
+      "else": {"not": {"anyOf": [{"required": ["block"]}, {"required": ["miner_stated_time"]}]}}
+    },
     "receipt": {
       "type": "object",
       "additionalProperties": false,

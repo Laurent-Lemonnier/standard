@@ -12,10 +12,27 @@
     "profile_version": {"const": "0.2.0"},
     "policy_ref": {"type": "string", "minLength": 1, "description": "The reference a report gives as trust_policy_ref."},
     "tsas": {"type": "array", "items": {"$ref": "#/$defs/tsa"}},
+    "bitcoin_header_sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/bitcoin_header_source"},
+      "description": "Optional. Where the verifier takes Bitcoin block headers from, to check an OpenTimestamps proof: its own source, named by reference. No header is carried in the policy."
+    },
     "keys": {"type": "array", "items": {"$ref": "#/$defs/key"}},
     "checkpoint_sources": {"type": "array", "items": {"$ref": "#/$defs/checkpoint_source"}}
   },
   "$defs": {
+    "bitcoin_header_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_ref", "network", "kind", "holder"],
+      "properties": {
+        "source_ref": {"$ref": "#/$defs/ref"},
+        "network": {"const": "mainnet", "description": "The chain: an OpenTimestamps attestation names a height and no network, so the policy says which chain. Bitcoin mainnet only in this version."},
+        "kind": {"enum": ["node", "header_file"], "description": "node: a Bitcoin node the verifier runs. header_file: a file of headers the verifier keeps."},
+        "holder": {"type": "string", "minLength": 1, "description": "Who runs the node or keeps the file."}
+      }
+    },
     "ref": {"type": "string", "minLength": 1, "maxLength": 256},
     "time": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$", "description": "A real UTC time, to the second: a date that exists, with no leap second."},
     "revocation": {
