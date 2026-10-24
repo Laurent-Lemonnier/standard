@@ -474,8 +474,8 @@ def inclusion_path(hashes_, m):
 # ---------------------------------------------------------------- OpenTimestamps (a real proof and a synthetic chain)
 
 # A REAL OpenTimestamps proof, made for these vectors: the SHA-256 of R0's seal (its 32 raw bytes) was submitted to the
-# public calendars alice.btc.calendar.opentimestamps.org and bob.btc.calendar.opentimestamps.org on 2026-10-24 at
-# 00:29 UTC; their answers were upgraded once each calendar's commitment was in a Bitcoin block, and combined into one
+# public calendars alice.btc.calendar.opentimestamps.org and bob.btc.calendar.opentimestamps.org on 2026-10-23 at
+# 22:29 UTC (00:29 in Paris); their answers were upgraded once each calendar's commitment was in a Bitcoin block, and combined into one
 # proof with two Bitcoin attestations, at heights 972840 (alice) and 972842 (bob). The two headers are the blocks'
 # real 80-byte headers, as blockstream.info and mempool.space both gave them (identical, each hashing to its block's
 # hash). Public data: no key is involved. Only a real proof catches a misreading the generator and the reader share.
@@ -1234,6 +1234,14 @@ def build():
     # nine-byte limit before any length limit is reached.
     ots("seal_r0_varint_10_bytes", "R0's seal with an append argument's length written as a 10-byte varint (2^63)",
         subj_r0, ots_proof(d_r0, b"\xf0" + ots_varuint(2 ** 63) + b"\x00" * 16))
+    # An operation's result at the limit of 4,096 bytes (an append of 4,064 bytes to the 32-byte digest), and one byte over.
+    items, root_lim = ots_path(d_r0, [("append", b"\x01" * 4064), ("sha256",)], bitcoin(800006))
+    block(800006, root_lim, "2026-09-27T18:00:00Z")
+    ots("seal_r0_result_at_limit", "R0's seal with an append whose result is exactly 4,096 bytes: within the limit, to "
+        "block 800006", subj_r0, ots_proof(d_r0, ots_tree(items)))
+    items, _ = ots_path(d_r0, [("append", b"\x01" * 4065), ("sha256",)], bitcoin(800006))
+    ots("seal_r0_result_over_limit", "R0's seal with an append whose result is 4,097 bytes: one over the limit", subj_r0,
+        ots_proof(d_r0, ots_tree(items)))
     ots("seal_r0_same_operation_twice", "R0's seal with sha256 written twice at one point", subj_r0,
         ots_proof(d_r0, ots_tree([("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800001))]),
                                   ("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800002))])])))

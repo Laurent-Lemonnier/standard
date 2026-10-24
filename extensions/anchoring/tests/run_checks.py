@@ -1041,6 +1041,7 @@ OTS_MAX_DEPTH = 256        # nested timestamps (each operation opens one level);
 OTS_MAX_VARUINT_BYTES = 9  # a varint of at most 63 bits; the reference library accepts far longer ones
 OTS_MAX_ARG = 4096         # an append or prepend argument
 OTS_MAX_PAYLOAD = 8192     # an attestation's payload
+OTS_MAX_RESULT = 4096      # an operation's result, as the reference library's MAX_RESULT_LENGTH
 OTS_MAX_HEIGHT = MAX_COUNT  # a height a report can carry as a JSON integer
 
 
@@ -1086,16 +1087,20 @@ def ots_read(raw):
             raise NotOts(f"{what} is {n} bytes, over the limit of {limit}")
         return take(n, what)
 
-    def node(depth):
+    def node(depth, length):
+        """length: the size of the message at this point, followed through the operations so that no result over
+        OTS_MAX_RESULT is ever built; a sha256 gives 32 bytes, an append or prepend adds its argument."""
         if depth > OTS_MAX_DEPTH:
             raise NotOts(f"timestamps nested deeper than {OTS_MAX_DEPTH} levels")
         out = {"ops": {}, "atts": []}
+        seen = set()
 
         def item(tag):
             if tag == 0x00:
                 att = (take(8, "an attestation's tag"), varbytes(OTS_MAX_PAYLOAD, "an attestation's payload"))
-                if att in out["atts"]:
+                if att in seen:
                     raise NotOts("the same attestation twice at one point")
+                seen.add(att)
                 out["atts"].append(att)
                 return
             if tag in OTS_KNOWN_UNSUPPORTED:
@@ -1106,7 +1111,10 @@ def ots_read(raw):
             arg = varbytes(OTS_MAX_ARG, "an argument") if tag != OTS_SHA256 else b""
             if (tag, arg) in out["ops"]:
                 raise NotOts("the same operation twice at one point")
-            out["ops"][(tag, arg)] = node(depth + 1)
+            result = 32 if tag == OTS_SHA256 else length + len(arg)
+            if result > OTS_MAX_RESULT:
+                raise NotOts(f"an operation's result would be {result} bytes, over the limit of {OTS_MAX_RESULT}")
+            out["ops"][(tag, arg)] = node(depth + 1, result)
 
         tag = take(1, "an operation")[0]
         while tag == 0xff:
@@ -1124,7 +1132,7 @@ def ots_read(raw):
     if file_hash != OTS_SHA256:
         raise OtsNotSupported(f"a file hash other than sha256 ({OTS_KNOWN_UNSUPPORTED.get(file_hash, hex(file_hash))})")
     digest = take(32, "the digest")
-    tree = node(1)
+    tree = node(1, 32)
     if pos != len(raw):
         raise NotOts("bytes after the proof")
     return digest, tree
@@ -1133,9 +1141,13 @@ def ots_read(raw):
 def ots_attestations(tree, digest):
     """Replay the tree from the digest: [(kind, value, message)] for each attestation, kind bitcoin (value the height),
     pending (value the calendar's text) or unknown (skipped, by its length, as read)."""
-    out, stack = [], [(tree, digest)]
+    out, stack = [], [(tree, None, b"", digest)]
     while stack:
-        node, msg = stack.pop()
+        node, tag, arg, parent = stack.pop()
+        # The message at this point, computed only now that this branch is replayed: holding every branch's
+        # message at once would cost the chain's length times the number of leaves.
+        msg = parent if tag is None else (sha256(parent) if tag == OTS_SHA256 else
+                                          (parent + arg if tag == OTS_APPEND else arg + parent))
         for tag8, payload in node["atts"]:
             if tag8 == OTS_BITCOIN:
                 # The height: one varint filling the payload, of at most OTS_MAX_VARUINT_BYTES bytes, in its shortest
@@ -1162,8 +1174,7 @@ def ots_attestations(tree, digest):
             else:
                 out.append(("unknown", tag8.hex(), msg))
         for (tag, arg), child in node["ops"].items():
-            nxt = sha256(msg) if tag == OTS_SHA256 else (msg + arg if tag == OTS_APPEND else arg + msg)
-            stack.append((child, nxt))
+            stack.append((child, tag, arg, msg))
     return out
 
 
