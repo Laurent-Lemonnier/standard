@@ -355,13 +355,17 @@ def signature_verifies(cp, policy):
         return False
 
 
-def check_timestamp(ts, policy, export, chain_id, held):
-    """Reference check of one timestamp assertion. held: the checkpoints the verifier holds, for a signature subject."""
+def check_timestamp(ts, policy, export, chain_id, held, headers=None):
+    """Reference check of one timestamp assertion. held: the checkpoints the verifier holds, for a signature subject.
+    headers: the Bitcoin block headers the verifier holds from its own source ({"source_ref", "headers": {height:
+    hex}}), for an OpenTimestamps proof."""
     checks = {k: "not_checked" for k in CHECKS}
     findings = []
     subject = ts["subject"]
-    out = {"subject": shown_subject(subject), "tsa_ref": ts["tsa_ref"], "checks": checks, "findings": findings,
+    out = {"subject": shown_subject(subject), "checks": checks, "findings": findings,
            "issuer_time": {"status": "not_checked"}}
+    if "tsa_ref" in ts:
+        out["tsa_ref"] = ts["tsa_ref"]
     value = subject_value(subject)
 
     # The subject: are its bytes the seal, link or signature value it names?
@@ -411,6 +415,9 @@ def check_timestamp(ts, policy, export, chain_id, held):
             else:
                 checks["subject_bytes"] = "failed"
                 findings.append("the signature value is that of another checkpoint than the subject names")
+
+    if ts.get("format") == "opentimestamps":
+        return check_ots(ts, policy, out, checks["subject_bytes"], value, headers)
 
     # The token itself.
     try:
@@ -783,7 +790,8 @@ def cbor_head(major, n):
 def sig_structure(protected, payload):
     """RFC 9052 section 4.4 for COSE_Sign1: ["Signature1", protected header bytes, external_aad (empty), payload],
     written in the shortest definite form, whatever the lengths. These bytes start 84 6a "Signature1"; the shared
-    rule's bytes start "DPS-SIG" 00: no bytes are both, so one key may sign both formats."""
+    rule's bytes start "DPS-SIG" 00: no bytes are both, so the two formats cannot be confused (a witness still signs
+    its statements with a key of their own: RFC 9943 section 9.4)."""
     def bstr(data):
         return cbor_head(2, len(data)) + data
     return b"\x84" + b"\x6aSignature1" + bstr(protected) + b"\x40" + bstr(payload)
@@ -1021,6 +1029,253 @@ def check_receipt(info, policy, allowed, where):
     return out
 
 
+# ---------------------------------------------------------------- an OpenTimestamps proof as a timestamp
+
+OTS_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
+OTS_VERSION = 1
+OTS_SHA256, OTS_APPEND, OTS_PREPEND = 0x08, 0xf0, 0xf1
+OTS_KNOWN_UNSUPPORTED = {0x02: "sha1", 0x03: "ripemd160", 0x67: "keccak256", 0xf2: "reverse", 0xf3: "hexlify"}
+OTS_BITCOIN = bytes.fromhex("0588960d73d71901")   # a Bitcoin block header attestation: the payload is the height
+OTS_PENDING = bytes.fromhex("83dfe30d2ef90c8e")   # a calendar's promise, not yet in a block
+OTS_MAX_DEPTH = 256        # nested timestamps (each operation opens one level); the real proof in the vectors has 79
+OTS_MAX_VARUINT_BYTES = 9  # a varint of at most 63 bits; the reference library accepts far longer ones
+OTS_MAX_ARG = 4096         # an append or prepend argument
+OTS_MAX_PAYLOAD = 8192     # an attestation's payload
+OTS_MAX_RESULT = 4096      # an operation's result, as the reference library's MAX_RESULT_LENGTH
+OTS_MAX_HEIGHT = MAX_COUNT  # a height a report can carry as a JSON integer
+
+
+class NotOts(ValueError):
+    """Bytes this check does not read as an OpenTimestamps proof, with the reason."""
+
+
+class OtsNotSupported(ValueError):
+    """A proof this check reads but cannot replay: an operation other than sha256, append and prepend."""
+
+
+def ots_read(raw):
+    """A strict reader: the magic, version 1, the file hash sha256 and its 32 bytes, then the timestamp tree; varints in
+    their shortest form and within OTS_MAX_VARUINT_BYTES; arguments, payloads and depth within their limits; the same
+    operation or attestation twice at one point refused (the reference library keeps the last); nothing after the proof.
+    Returns (digest, tree); a node is {"ops": {(tag, arg): node}, "atts": [(tag8, payload)]}. Raises NotOts or
+    OtsNotSupported with the reason."""
+    pos = 0
+
+    def take(n, what):
+        nonlocal pos
+        if pos + n > len(raw):
+            raise NotOts(f"the proof ends before {what}")
+        data = raw[pos:pos + n]
+        pos += n
+        return data
+
+    def varuint(what):
+        n = shift = 0
+        for count in range(1, OTS_MAX_VARUINT_BYTES + 1):
+            b = take(1, what)[0]
+            n |= (b & 0x7f) << shift
+            shift += 7
+            if not b & 0x80:
+                if count > 1 and b == 0:
+                    raise NotOts(f"{what} is not in its shortest form")
+                return n
+        raise NotOts(f"{what} is longer than {OTS_MAX_VARUINT_BYTES} bytes")
+
+    def varbytes(limit, what):
+        n = varuint(f"the length of {what}")
+        if n > limit:
+            raise NotOts(f"{what} is {n} bytes, over the limit of {limit}")
+        return take(n, what)
+
+    def node(depth, length):
+        """length: the size of the message at this point, followed through the operations so that no result over
+        OTS_MAX_RESULT is ever built; a sha256 gives 32 bytes, an append or prepend adds its argument."""
+        if depth > OTS_MAX_DEPTH:
+            raise NotOts(f"timestamps nested deeper than {OTS_MAX_DEPTH} levels")
+        out = {"ops": {}, "atts": []}
+        seen = set()
+
+        def item(tag):
+            if tag == 0x00:
+                att = (take(8, "an attestation's tag"), varbytes(OTS_MAX_PAYLOAD, "an attestation's payload"))
+                if att in seen:
+                    raise NotOts("the same attestation twice at one point")
+                seen.add(att)
+                out["atts"].append(att)
+                return
+            if tag in OTS_KNOWN_UNSUPPORTED:
+                raise OtsNotSupported(f"the operation {OTS_KNOWN_UNSUPPORTED[tag]}; this check replays sha256, append "
+                                      "and prepend only")
+            if tag not in (OTS_SHA256, OTS_APPEND, OTS_PREPEND):
+                raise NotOts(f"an unknown operation tag {tag:#04x}")
+            arg = varbytes(OTS_MAX_ARG, "an argument") if tag != OTS_SHA256 else b""
+            if (tag, arg) in out["ops"]:
+                raise NotOts("the same operation twice at one point")
+            result = 32 if tag == OTS_SHA256 else length + len(arg)
+            if result > OTS_MAX_RESULT:
+                raise NotOts(f"an operation's result would be {result} bytes, over the limit of {OTS_MAX_RESULT}")
+            out["ops"][(tag, arg)] = node(depth + 1, result)
+
+        tag = take(1, "an operation")[0]
+        while tag == 0xff:
+            item(take(1, "an operation")[0])
+            tag = take(1, "an operation")[0]
+        item(tag)
+        return out
+
+    if take(len(OTS_MAGIC), "its magic") != OTS_MAGIC:
+        raise NotOts("not an OpenTimestamps proof: the magic differs")
+    version = varuint("the version")
+    if version != OTS_VERSION:
+        raise NotOts(f"version {version}; this check reads version {OTS_VERSION}")
+    file_hash = take(1, "the file hash operation")[0]
+    if file_hash != OTS_SHA256:
+        raise OtsNotSupported(f"a file hash other than sha256 ({OTS_KNOWN_UNSUPPORTED.get(file_hash, hex(file_hash))})")
+    digest = take(32, "the digest")
+    tree = node(1, 32)
+    if pos != len(raw):
+        raise NotOts("bytes after the proof")
+    return digest, tree
+
+
+def ots_attestations(tree, digest):
+    """Replay the tree from the digest: [(kind, value, message)] for each attestation, kind bitcoin (value the height),
+    pending (value the calendar's text) or unknown (skipped, by its length, as read)."""
+    out, stack = [], [(tree, None, b"", digest)]
+    while stack:
+        node, tag, arg, parent = stack.pop()
+        # The message at this point, computed only now that this branch is replayed: holding every branch's
+        # message at once would cost the chain's length times the number of leaves.
+        msg = parent if tag is None else (sha256(parent) if tag == OTS_SHA256 else
+                                          (parent + arg if tag == OTS_APPEND else arg + parent))
+        for tag8, payload in node["atts"]:
+            if tag8 == OTS_BITCOIN:
+                # The height: one varint filling the payload, of at most OTS_MAX_VARUINT_BYTES bytes, in its shortest
+                # form, and at most OTS_MAX_HEIGHT. Each rule gives its own reason.
+                if len(payload) > OTS_MAX_VARUINT_BYTES:
+                    out.append(("bitcoin_refused", f"a Bitcoin attestation's height is a varint of {len(payload)} "
+                                f"bytes, over the limit of {OTS_MAX_VARUINT_BYTES}", msg))
+                    continue
+                ends = [p for p, b in enumerate(payload) if not b & 0x80]
+                if not payload or ends != [len(payload) - 1]:
+                    out.append(("bitcoin_refused", "a Bitcoin attestation's payload is not exactly one varint", msg))
+                    continue
+                if len(payload) > 1 and payload[-1] == 0:
+                    out.append(("bitcoin_refused", "a Bitcoin attestation's height is not in its shortest form", msg))
+                    continue
+                height = sum((b & 0x7f) << (7 * p) for p, b in enumerate(payload))
+                if height > OTS_MAX_HEIGHT:
+                    out.append(("bitcoin_refused", f"a Bitcoin attestation's height {height} is beyond what a report "
+                                "can carry (2^53 - 1)", msg))
+                    continue
+                out.append(("bitcoin", height, msg))
+            elif tag8 == OTS_PENDING:
+                out.append(("pending", payload, msg))
+            else:
+                out.append(("unknown", tag8.hex(), msg))
+        for (tag, arg), child in node["ops"].items():
+            stack.append((child, tag, arg, msg))
+    return out
+
+
+def check_ots(ts, policy, out, subject_check, value, headers):
+    """An OpenTimestamps proof, checked against a header from the verifier's own source. What it shows: the subject's
+    bytes existed before the block it names was mined. The header's time is the miner's statement, never a bound."""
+    checks = {"proof": "not_checked", "subject_bytes": subject_check, "operations": "not_checked",
+              "attestation": "not_checked", "header": "not_checked"}
+    findings = out["findings"]
+    out.update(format="opentimestamps", checks=checks,
+               issuer_time={"status": "not_checked", "findings": [
+                   "an OpenTimestamps proof gives no time that holds, so no issuer's time is compared with it"]})
+    out.pop("tsa_ref", None)
+    try:
+        digest, tree = ots_read(base64.b64decode(ts["proof_b64"], validate=True))
+        checks["proof"] = "verified"
+    except OtsNotSupported as exc:
+        checks["proof"], checks["operations"] = "verified", "not_supported"
+        findings.append(str(exc))
+        out["status"] = "not_supported"
+        return out
+    except (NotOts, binascii.Error, ValueError) as exc:
+        checks["proof"] = "failed"
+        findings.append(f"the proof is not read: {exc}")
+        out["status"] = "failed"
+        return out
+    if digest != sha256(value):
+        checks["subject_bytes"] = "failed"
+        findings.append("the proof starts from the SHA-256 of other bytes than the subject names")
+    checks["operations"] = "verified"
+    atts = ots_attestations(tree, digest)
+    for kind, val, _ in atts:
+        if kind == "unknown":
+            findings.append(f"an attestation of an unknown kind ({val}) is skipped")
+    bitcoin = [(h, msg) for kind, h, msg in atts if kind == "bitcoin"]
+    refused = [why for kind, why, _ in atts if kind == "bitcoin_refused"]
+    if refused:
+        checks["attestation"] = "failed"
+        findings.extend(refused)
+    elif not bitcoin:
+        pending = any(kind == "pending" for kind, _, _ in atts)
+        checks["attestation"] = "unavailable" if pending else "failed"
+        findings.append("only pending attestations: not yet in a block, so the proof shows nothing yet" if pending else
+                        "no attestation this check can use")
+    else:
+        checks["attestation"] = "verified"
+        sources = {s["source_ref"]: s for s in policy.get("bitcoin_header_sources", []) if s.get("network") == "mainnet"}
+        held = headers or {}
+        if not sources:
+            findings.append("the trust policy names no Bitcoin header source, so no header is checked")
+        elif held.get("source_ref") not in sources:
+            checks["header"] = "unavailable"
+            findings.append("no header is held from a source the trust policy names")
+        else:
+            results = []
+            for height, msg in sorted(bitcoin):
+                hdr_hex = held.get("headers", {}).get(str(height))
+                if hdr_hex is None:
+                    results.append((height, "unavailable", msg, None))
+                    continue
+                hdr = bytes.fromhex(hdr_hex) if isinstance(hdr_hex, str) and len(hdr_hex) == 160 else None
+                if hdr is None:
+                    results.append((height, "failed", msg, None))
+                elif hdr[36:68] == msg:
+                    results.append((height, "verified", msg, hdr))
+                else:
+                    results.append((height, "failed", msg, hdr))
+            good = [r for r in results if r[1] == "verified"]
+            if good:
+                # Several Bitcoin attestations: the lowest block the verifier holds a matching header for is reported.
+                height, _, _, hdr = good[0]
+                checks["header"] = "verified"
+                out["block"] = {"height": height, "hash_hex": sha256(sha256(hdr))[::-1].hex(),
+                                "header_source_ref": held["source_ref"]}
+                out["miner_stated_time"] = iso(datetime.fromtimestamp(int.from_bytes(hdr[68:72], "little"),
+                                                                      tz=timezone.utc))
+                findings.append(f"the subject's bytes existed before block {height} was mined; its header's time is "
+                                "the miner's statement, not a time they existed by; the header is only as good as "
+                                f"{held['source_ref']}, and this check does not test proof of work")
+            elif any(r[1] == "failed" for r in results):
+                checks["header"] = "failed"
+                for height, status, msg, hdr in results:
+                    if status == "failed":
+                        hint = (" (it matches only in the reverse byte order, as explorers show the root)"
+                                if hdr is not None and hdr[36:68] == msg[::-1] else "")
+                        findings.append(f"the header held for block {height} does not hold the proof's result as "
+                                        f"its Merkle root{hint}")
+            else:
+                checks["header"] = "unavailable"
+                findings.append("no header is held for the block" + ("s " if len(results) > 1 else " ") +
+                                ", ".join(str(r[0]) for r in results))
+    statuses = set(checks.values())
+    for worst in ("failed", "unavailable", "not_supported", "not_checked"):
+        if worst in statuses:
+            out["status"] = worst
+            break
+    else:
+        out["status"] = "verified"
+    return out
+
+
 def check_checkpoint(obtained, policy, export, chain_id, ts_results):
     """Reference check of one checkpoint, as the verifier obtained it (or could not)."""
     cp, where = obtained.get("checkpoint"), obtained["obtained_from"]
@@ -1169,7 +1424,8 @@ def check_checkpoint(obtained, policy, export, chain_id, ts_results):
         out["key_state"] = refused(policy_result, "the key state")
     elif signature["status"] == "verified":
         value = base64.b64decode(cp["signature"]["value_b64"])
-        covering = [(i, r) for i, r in enumerate(ts_results) if r["status"] == "verified" and r["_value"] == value]
+        # An OpenTimestamps proof gives no time that holds, so it carries no _value and never counts here.
+        covering = [(i, r) for i, r in enumerate(ts_results) if r["status"] == "verified" and r.get("_value") == value]
         out["key_state"] = key_state(key, cp, covering)
     else:
         out["key_state"] = {"status": "not_checked"}
@@ -1259,7 +1515,8 @@ def run_context(ctx):
     obtained = all_obtained(ctx)
     held = [o["checkpoint"] for o in obtained if o.get("checkpoint") and "signature" in o["checkpoint"]]
     ts = (ctx["attachment"] or {}).get("timestamps", [])
-    ts_results = [check_timestamp(t, ctx["policy"], ctx["export"], ctx["chain_id"], held) for t in ts]
+    ts_results = [check_timestamp(t, ctx["policy"], ctx["export"], ctx["chain_id"], held, ctx.get("headers"))
+                  for t in ts]
     cp_results = [check_checkpoint(o, ctx["policy"], ctx["export"], ctx["chain_id"], ts_results) for o in obtained]
     return ts_results, with_conflicts(obtained, cp_results)
 
@@ -1313,15 +1570,33 @@ def read_with_documents(report, ctx):
         if not json_integer(i) or i >= len(stated):
             continue
         ref = ts_ref[i]
-        if r["subject"] != shown_subject(stated[i]["subject"]) or r["tsa_ref"] != stated[i]["tsa_ref"]:
+        if (r.get("format") == "opentimestamps") != (ref.get("format") == "opentimestamps"):
+            problems.append(f"timestamp {i}: not reported in the format the attachment states it")
+            continue
+        if ref.get("format") == "opentimestamps":
+            # An OpenTimestamps proof: the block and the miner's time as found, never more than the check finds.
+            if r["subject"] != shown_subject(stated[i]["subject"]):
+                problems.append(f"timestamp {i}: subject not as the attachment states it")
+            if r["status"] == "verified" and ref["status"] != "verified":
+                problems.append(f"timestamp {i}: reported verified, but the reference check finds {ref['status']}")
+            for k, got in r["checks"].items():
+                if got == "verified" and ref["checks"].get(k) != "verified":
+                    problems.append(f"timestamp {i}: {k} reported verified, but it is {ref['checks'].get(k)}")
+            if r["status"] == ref["status"] == "verified" and (r.get("block"), r.get("miner_stated_time")) != (
+                    ref.get("block"), ref.get("miner_stated_time")):
+                problems.append(f"timestamp {i}: the block or the miner's stated time not reported as found")
+            continue
+        # Read with .get: a result or a timestamp of the other format names no authority, and the reader goes on.
+        if r["subject"] != shown_subject(stated[i]["subject"]) or r.get("tsa_ref") != stated[i].get("tsa_ref"):
             problems.append(f"timestamp {i}: subject or tsa_ref not as the attachment states them")
         if r["status"] == "verified" and ref["status"] != "verified":
             problems.append(f"timestamp {i}: reported verified, but the reference check finds {ref['status']}")
         for k in CHECKS:
-            if r["checks"][k] == "verified" and ref["checks"][k] != "verified":
-                problems.append(f"timestamp {i}: {k} reported verified, but it is {ref['checks'][k]}")
+            if r["checks"].get(k) == "verified" and ref["checks"].get(k) != "verified":
+                problems.append(f"timestamp {i}: {k} reported verified, but it is {ref['checks'].get(k)}")
         if r["status"] == ref["status"] == "verified":
-            if (r["gen_time"], r["existed_no_later_than"]) != (ref["gen_time"], ref["existed_no_later_than"]):
+            if (r.get("gen_time"), r.get("existed_no_later_than")) != (ref.get("gen_time"),
+                                                                       ref.get("existed_no_later_than")):
                 problems.append(f"timestamp {i}: gen_time or existed_no_later_than not as the token gives them")
         it, ri = r["issuer_time"], ref["issuer_time"]
         if it["status"] == "verified" and ri["status"] != "verified":
@@ -1666,7 +1941,7 @@ def vector_case(c, v):
             if root is None or root.hex() != st["root_hex"] or (size, index) != (st["tree_size"], st["leaf_index"]):
                 bad.append(f"{name}: the path does not lead to the root")
     elif kind == "format_prefixes":
-        # The two formats one witness key signs cannot collide: a Sig_structure starts with 84 6a "Signature1", the
+        # The two formats cannot be confused: a Sig_structure starts with 84 6a "Signature1", the
         # shared rule's bytes with "DPS-SIG" 00.
         st = v["scitt"]["statements"][c["statement"]]
         tbs, payload = bytes.fromhex(st["to_be_signed_hex"]), bytes.fromhex(st["payload_hex"])
@@ -1695,6 +1970,38 @@ def vector_case(c, v):
                     skey.verify(rc[3], bytes.fromhex(st["receipt_to_be_signed_hex"]))
                 except InvalidSignature:
                     bad.append(f"{name}: the receipt's signature")
+    elif kind == "ots_real":
+        # The real proof, read strictly, replays from the SHA-256 of R0's seal to both mainnet headers, the result being
+        # each header's Merkle root as stored in its bytes (the reverse of the hex explorers show); each header hashes
+        # to its block's hash.
+        ots = v["opentimestamps"]
+        ts = ots["timestamps"][c["proof"]]["timestamp"]
+        digest, tree = ots_read(base64.b64decode(ts["proof_b64"]))
+        if digest != sha256(subject_value(ts["subject"])):
+            bad.append("the proof's digest is not the SHA-256 of its subject's bytes")
+        found = sorted((h, msg) for kind_, h, msg in ots_attestations(tree, digest) if kind_ == "bitcoin")
+        if [h for h, _ in found] != c["heights"]:
+            bad.append(f"the proof's Bitcoin heights are {[h for h, _ in found]}")
+        for h, msg in found:
+            x = ots["headers"]["mainnet"].get(str(h))
+            hdr = bytes.fromhex(x["header_hex"]) if x else b""
+            if hdr[36:68] != msg or hdr[36:68][::-1] == msg:
+                bad.append(f"block {h}: the result is not the Merkle root as stored in the header")
+            if x and sha256(sha256(hdr))[::-1].hex() != x["block_hash"]:
+                bad.append(f"block {h}: the header does not hash to the block's hash")
+    elif kind == "ots_refusals":
+        # The strict reader refuses each malformed proof, for the reason named; it reads every other proof.
+        for name, x in v["opentimestamps"]["timestamps"].items():
+            try:
+                ots_read(base64.b64decode(x["timestamp"]["proof_b64"]))
+                got = None
+            except (NotOts, OtsNotSupported) as exc:
+                got = str(exc)
+            want = c["refused"].get(name)
+            if want is None and got is not None:
+                bad.append(f"{name}: refused ({got}), where it must be read")
+            elif want is not None and (got is None or want not in got):
+                bad.append(f"{name}: {'read' if got is None else repr(got)}, where it must be refused for {want!r}")
     elif kind == "reproduction":
         if load_generator().render() != (HERE / "vectors.json").read_bytes():
             bad.append("vectors.json")
@@ -1784,11 +2091,21 @@ def timestamp_case(c, v, validators):
         if h.get("schema_valid", True) != (not found):
             raise ValueError("a held checkpoint's schema validity is not what the case says")
         held.append(cp)
-    r = reference(check_timestamp, ts, policy, export, chain_of(c, v), held)
+    r = reference(check_timestamp, ts, policy, export, chain_of(c, v), held, held_headers(c, v))
     summary = {"status": r["status"], **r["checks"], "issuer_time": r["issuer_time"]["status"]}
     for k in ("existed_no_later_than", "gen_time"):
         if k in c["expected"]:
             summary[k] = r.get(k)
+    if r.get("format") == "opentimestamps":
+        for k, got in (("height", (r.get("block") or {}).get("height")), ("hash_hex", (r.get("block") or {}).get(
+                "hash_hex")), ("miner_stated_time", r.get("miner_stated_time"))):
+            if k in c["expected"]:
+                summary[k] = got
+        if "result_schema_valid" in c["expected"]:
+            written = {"timestamp_index": 0, **{k: x for k, x in r.items() if not k.startswith("_")}}
+            summary["result_schema_valid"] = not errors(ots_result_validator(), written)
+    if "finding" in c["expected"]:  # a phrase the findings must hold: the reason, where several rules could refuse
+        summary["finding"] = c["expected"]["finding"] if c["expected"]["finding"] in " ".join(r["findings"]) else None
     if "consistency" in c["expected"]:
         summary["consistency"] = r["issuer_time"].get("consistency")
     detail = r["findings"] + r["issuer_time"].get("findings", [])
@@ -1796,10 +2113,38 @@ def timestamp_case(c, v, validators):
 
 
 def expected_timestamp(c):
-    """Every check, the timestamp and the issuer's time are expected verified unless the case says otherwise."""
-    full = {"status": "verified", **{k: "verified" for k in CHECKS}, "issuer_time": "verified"}
+    """Every check, the timestamp and the issuer's time are expected verified unless the case says otherwise. For an
+    OpenTimestamps proof (headers named), its five checks are expected verified and the issuer's time not checked."""
+    if "headers" in c or c.get("format") == "opentimestamps":
+        full = {"status": "verified", **{k: "verified" for k in OTS_CHECKS}, "issuer_time": "not_checked"}
+    else:
+        full = {"status": "verified", **{k: "verified" for k in CHECKS}, "issuer_time": "verified"}
     full.update(c["expected"])
     return full
+
+
+OTS_CHECKS = ("proof", "subject_bytes", "operations", "attestation", "header")
+
+
+def held_headers(c, v):
+    """The Bitcoin headers a case's verifier holds: headers {"source_ref", "set": a set in vectors.json, "only":
+    [heights]} or {"source_ref", "headers": {height: hex}}; none when the case names none."""
+    spec = c.get("headers")
+    if spec is None:
+        return None
+    if "headers" in spec:
+        return {"source_ref": spec["source_ref"], "headers": dict(spec["headers"])}
+    full = v["opentimestamps"]["headers"][spec["set"]]
+    only = spec.get("only")
+    return {"source_ref": spec["source_ref"],
+            "headers": {h: x["header_hex"] for h, x in full.items() if only is None or int(h) in only}}
+
+
+def ots_result_validator():
+    """The report schema's OpenTimestamps result, as a validator of one result."""
+    report = strict_json(SCHEMAS["report"].read_bytes())
+    return Draft202012Validator({"$schema": report["$schema"], "$defs": report["$defs"],
+                                 "$ref": "#/$defs/ots_timestamp_result"})
 
 
 def checkpoint_case(c, v, validators):
@@ -1845,7 +2190,8 @@ def checkpoint_case(c, v, validators):
         others.append(o)
     all_cps = [obtained] + others
     held = [o["checkpoint"] for o in all_cps if o["checkpoint"] and "signature" in o["checkpoint"]]
-    ts_results = [reference(check_timestamp, t, policy, export, chain_id, held) for t in timestamps]
+    ts_results = [reference(check_timestamp, t, policy, export, chain_id, held, held_headers(c, v))
+                  for t in timestamps]
     results = [reference(check_checkpoint, o, policy, export, chain_id, ts_results) for o in all_cps]
     r = with_conflicts(all_cps, results)[0]
     summary = {d: (r[d] if d == "status" else r[d]["status"]) for d in CHECKPOINT_DIMENSIONS}
@@ -1922,7 +2268,7 @@ def pairing_case(c, v, validators):
                                                  ("pv_export", export), ("trust_policy", policy))):
         return "error", "every document must be schema-valid for this case"
     ctx = {"attachment": attachment, "export": export, "policy": policy, "chain_id": base["chain_id"],
-           "obtained": obtained}
+           "obtained": obtained, "headers": held_headers(c, v)}
     problems = reference(read_with_documents, report, ctx)
     return ("inconsistent" if problems else "consistent"), "; ".join(problems)
 

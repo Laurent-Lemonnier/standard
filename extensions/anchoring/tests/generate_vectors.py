@@ -471,6 +471,120 @@ def inclusion_path(hashes_, m):
     return inclusion_path(hashes_[k:], m - k) + [merkle_root(hashes_[:k])]
 
 
+# ---------------------------------------------------------------- OpenTimestamps (a real proof and a synthetic chain)
+
+# A REAL OpenTimestamps proof, made for these vectors: the SHA-256 of R0's seal (its 32 raw bytes) was submitted to the
+# public calendars alice.btc.calendar.opentimestamps.org and bob.btc.calendar.opentimestamps.org on 2026-10-23 at
+# 22:29 UTC (00:29 in Paris); their answers were upgraded once each calendar's commitment was in a Bitcoin block, and combined into one
+# proof with two Bitcoin attestations, at heights 972840 (alice) and 972842 (bob). The two headers are the blocks'
+# real 80-byte headers, as blockstream.info and mempool.space both gave them (identical, each hashing to its block's
+# hash). Public data: no key is involved. Only a real proof catches a misreading the generator and the reader share.
+REAL_OTS_PROOF_B64 = (
+    "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"
+)
+REAL_OTS_HEADERS = {
+    "972840": {"block_hash": "000000000000000000016b64fc88053f707560b94f660ac1392aa2e73adb7401",
+               "header_hex": "0020393423fb061183ff8af7080c99418fb52fe77df68ef7b663010000000000000000009883bde5"
+                             "e4af64daa2579276cf6671fa57b33a4bcdbf365e58386ab5c17b90c007e1db6a930002171e264e4a"},
+    "972842": {"block_hash": "000000000000000000014f904572d9a524bdc78599fe8c1d29cabae105290a6f",
+               "header_hex": "00000034b92efaa80858d42231edab33c5a57a867183937793d10000000000000000000078b99d7c"
+                             "dcb3b72f2abdaeb05ba443cc12e6d33859b426239a0bdbc3c40aa3a314e2db6a93000217f2c9ba1e"},
+}
+
+OTS_MAGIC = b"\x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94"
+OTS_BITCOIN = bytes.fromhex("0588960d73d71901")
+OTS_PENDING = bytes.fromhex("83dfe30d2ef90c8e")
+
+
+def ots_varuint(n):
+    out = b""
+    while True:
+        b, n = n & 0x7f, n >> 7
+        out += bytes([b | (0x80 if n else 0)])
+        if not n:
+            return out
+
+
+def ots_varbytes(data):
+    return ots_varuint(len(data)) + data
+
+
+def ots_tree(items):
+    """A timestamp tree written as the OpenTimestamps serialisation writes it. items: a list of ("op", tag, arg,
+    subtree) and ("att", tag8, payload); every item but the last is preceded by 0xff."""
+    out = []
+    for item in items:
+        if item[0] == "att":
+            out.append(b"\x00" + item[1] + ots_varbytes(item[2]))
+        else:
+            _, tag, arg, sub = item
+            out.append(bytes([tag]) + (ots_varbytes(arg) if tag in (0xf0, 0xf1) else b"") + ots_tree(sub))
+    return b"".join(b"\xff" + x for x in out[:-1]) + out[-1]
+
+
+def ots_proof(digest, tree, version=1, magic=OTS_MAGIC):
+    return magic + ots_varuint(version) + b"\x08" + digest + tree
+
+
+def ots_path(digest, steps, tail):
+    """A straight path of operations from the digest, ending in tail (a list of items); returns (items, the message at
+    the end). steps: ("append" | "prepend", bytes) or ("sha256",)."""
+    msg, chain = digest, []
+    for step in steps:
+        if step[0] == "sha256":
+            msg = sha256(msg)
+            chain.append((0x08, b""))
+        elif step[0] == "append":
+            msg = msg + step[1]
+            chain.append((0xf0, step[1]))
+        else:
+            msg = step[1] + msg
+            chain.append((0xf1, step[1]))
+    items = tail(msg)
+    for tag, arg in reversed(chain):
+        items = [("op", tag, arg, items)]
+    return items, msg
+
+
+def synthetic_header(merkle_root, height, time_text):
+    """A test block header: version 0x20000000, a previous hash derived from the height, the given Merkle root as
+    stored (the header's own byte order), the time, and fixed bits and nonce. It carries no proof of work: the check
+    does not test any, and says so."""
+    prev = sha256(b"dps-anchoring test block " + str(height - 1).encode("ascii"))
+    t = int(datetime.strptime(time_text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp())
+    return (0x20000000).to_bytes(4, "little") + prev + merkle_root + t.to_bytes(4, "little") + bytes.fromhex(
+        "ffff001d") + (height & 0xffffffff).to_bytes(4, "little")
+
+
 # ---------------------------------------------------------------- the whole file
 
 def build():
@@ -551,6 +665,8 @@ def build():
        presented={"checkpoint_time": "2026-09-27T13:00:00Z"})
     cp("cp_d", "witness-d-1, stated after the key's not_after", "witness-d-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z")
     cp("cp_x", "witness-x-1, a key the policy does not list", "witness-x-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z")
+    cp("cp_a_statement_key", "cp_a's fields signed under the shared rule by witness-a-scitt-1, a key the policy lists "
+       "for SCITT statements only (K139)", "witness-a-scitt-1", CHAIN, 3, "L2", "2026-09-27T12:00:00Z")
     cp("cp_x_chain_2", "witness-x-1, correctly signed, for chain 2: with witness-x-1 listed for a source of chain 2 "
        "only, the key the checkpoint's own chain_id would name (K84)", "witness-x-1", CHAIN_2, 3, "L2",
        "2026-09-27T12:00:00Z")
@@ -1045,6 +1161,119 @@ def build():
                 "comparison": {"status": "not_checked"},
                 "prefix": prefix, "freshness": "not_established"}
 
+    # ---- OpenTimestamps proofs: the real one, and a synthetic chain for every rule
+    ots_ts, syn_headers = {}, {}
+    nonce = sha256(b"dps-anchoring test calendar nonce")[:16]
+    sibling = sha256(b"dps-anchoring test calendar sibling")
+    subj_r0 = {"kind": "seal", "decision_id": "DR-2099-001", "value_hex": seal["R0"]}
+    subj_r1 = {"kind": "seal", "decision_id": "DR-2099-002", "value_hex": seal["R1"]}
+    subj_l2 = {"kind": "chain_link", "chain_id": CHAIN, "sequence": 2, "value_hex": links["L2"]}
+    subj_c = subject_signature("cp_c")
+    value_of = {id(subj_r0): bytes.fromhex(seal["R0"]), id(subj_r1): bytes.fromhex(seal["R1"]),
+                id(subj_l2): bytes.fromhex(links["L2"]), id(subj_c): base64.b64decode(subj_c["value_b64"])}
+    steps = [("prepend", nonce), ("sha256",), ("append", sibling), ("sha256",)]
+
+    def bitcoin(height):
+        return lambda msg: [("att", OTS_BITCOIN, ots_varuint(height))]
+
+    def block(height, root, time_text):
+        hdr = synthetic_header(root, height, time_text)
+        syn_headers[str(height)] = {"block_hash": sha256(sha256(hdr))[::-1].hex(), "header_hex": hdr.hex()}
+
+    def ots(name, about, subject, proof_bytes):
+        ots_ts[name] = {"about": about, "timestamp": {"assertion": "timestamp", "subject": subject,
+                                                      "hash_algorithm": "SHA-256", "format": "opentimestamps",
+                                                      "proof_b64": b64(proof_bytes)}}
+
+    d_r0 = sha256(value_of[id(subj_r0)])
+    items, root = ots_path(d_r0, steps, bitcoin(800001))
+    block(800001, root, "2026-09-27T13:00:00Z")
+    good_r0 = ots_proof(d_r0, ots_tree(items))
+    ots("seal_r0", "a synthetic proof from the SHA-256 of R0's seal to block 800001", subj_r0, good_r0)
+    d_l2 = sha256(value_of[id(subj_l2)])
+    items, root = ots_path(d_l2, steps, bitcoin(800002))
+    block(800002, root, "2026-09-27T14:00:00Z")
+    ots("link_2", "a synthetic proof from the SHA-256 of link(2) to block 800002", subj_l2, ots_proof(d_l2, ots_tree(items)))
+    d_c = sha256(value_of[id(subj_c)])
+    items, root = ots_path(d_c, steps, bitcoin(800003))
+    block(800003, root, "2026-09-27T15:00:00Z")
+    ots("sig_cp_c", "a synthetic proof from the SHA-256 of cp_c's signature value to block 800003", subj_c,
+        ots_proof(d_c, ots_tree(items)))
+    # Two Bitcoin attestations: the same digest to block 800001 and, by another path, to block 800004.
+    items_b, root_b = ots_path(d_r0, [("append", nonce), ("sha256",)], bitcoin(800004))
+    block(800004, root_b, "2026-09-27T16:00:00Z")
+    items_a, _ = ots_path(d_r0, steps, bitcoin(800001))
+    ots("seal_r0_two_blocks", "R0's seal to block 800001 and, by another path, to block 800004", subj_r0,
+        ots_proof(d_r0, ots_tree(items_a + items_b)))
+    ots("seal_r0_unknown_attestation", "R0's seal with an attestation of an unknown kind beside the path to block "
+        "800001", subj_r0, ots_proof(d_r0, ots_tree([("att", bytes.fromhex("0102030405060708"), b"x")] + items_a)))
+    items, _ = ots_path(d_r0, steps, lambda msg: [("att", OTS_PENDING, ots_varbytes(b"https://calendar.example"))])
+    ots("seal_r0_pending", "R0's seal to a pending attestation only", subj_r0, ots_proof(d_r0, ots_tree(items)))
+    ots("seal_r0_ripemd160", "R0's seal through ripemd160 first, as some older proofs start", subj_r0,
+        ots_proof(d_r0, ots_tree([("op", 0x03, b"", [("att", OTS_BITCOIN, ots_varuint(800001))])])))
+    ots("seal_r0_trailing", "the synthetic proof of R0's seal with one byte after it", subj_r0, good_r0 + b"\x00")
+    ots("seal_r0_version_long", "the same with its version written 81 00, not in its shortest form", subj_r0,
+        OTS_MAGIC + b"\x81\x00" + good_r0[len(OTS_MAGIC) + 1:])
+    ots("seal_r0_magic", "the same with one byte of its magic changed", subj_r0,
+        OTS_MAGIC[:-1] + b"\x00" + good_r0[len(OTS_MAGIC):])
+    ots("seal_r0_version_2", "the same labelled version 2", subj_r0,
+        OTS_MAGIC + ots_varuint(2) + good_r0[len(OTS_MAGIC) + 1:])
+    items, _ = ots_path(d_r0, [("sha256",)] * 300, bitcoin(800001))
+    ots("seal_r0_deep", "R0's seal through 300 nested operations, over the limit of 256", subj_r0,
+        ots_proof(d_r0, ots_tree(items)))
+    items, _ = ots_path(d_r0, steps, lambda msg: [("att", OTS_BITCOIN, b"\x80" * 19 + b"\x01")])
+    ots("seal_r0_height_20_bytes", "R0's seal to a height written as a 20-byte varint", subj_r0,
+        ots_proof(d_r0, ots_tree(items)))
+    items, _ = ots_path(d_r0, steps, bitcoin(2 ** 60))
+    ots("seal_r0_height_big", "R0's seal to height 2^60, beyond what a report can carry", subj_r0,
+        ots_proof(d_r0, ots_tree(items)))
+    items, _ = ots_path(d_r0, [("append", b"\x00" * 5000), ("sha256",)], bitcoin(800001))
+    ots("seal_r0_long_argument", "R0's seal with an append argument of 5,000 bytes, over the limit of 4,096", subj_r0,
+        ots_proof(d_r0, ots_tree(items)))
+    # An append whose argument's length is written as a 10-byte varint, in its shortest form (2^63): over the
+    # nine-byte limit before any length limit is reached.
+    ots("seal_r0_varint_10_bytes", "R0's seal with an append argument's length written as a 10-byte varint (2^63)",
+        subj_r0, ots_proof(d_r0, b"\xf0" + ots_varuint(2 ** 63) + b"\x00" * 16))
+    # An operation's result at the limit of 4,096 bytes (an append of 4,064 bytes to the 32-byte digest), and one byte over.
+    items, root_lim = ots_path(d_r0, [("append", b"\x01" * 4064), ("sha256",)], bitcoin(800006))
+    block(800006, root_lim, "2026-09-27T18:00:00Z")
+    ots("seal_r0_result_at_limit", "R0's seal with an append whose result is exactly 4,096 bytes: within the limit, to "
+        "block 800006", subj_r0, ots_proof(d_r0, ots_tree(items)))
+    items, _ = ots_path(d_r0, [("append", b"\x01" * 4065), ("sha256",)], bitcoin(800006))
+    ots("seal_r0_result_over_limit", "R0's seal with an append whose result is 4,097 bytes: one over the limit", subj_r0,
+        ots_proof(d_r0, ots_tree(items)))
+    ots("seal_r0_same_operation_twice", "R0's seal with sha256 written twice at one point", subj_r0,
+        ots_proof(d_r0, ots_tree([("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800001))]),
+                                  ("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800002))])])))
+    d_r1 = sha256(value_of[id(subj_r1)])
+    items, root = ots_path(d_r1, steps, bitcoin(800005))
+    block(800005, root, "2026-09-27T17:00:00Z")
+    ots("seal_r1_as_r0", "a proof from the SHA-256 of R1's seal, presented for R0's seal", subj_r0,
+        ots_proof(d_r1, ots_tree(items)))
+    ots("token_as_proof", "an RFC 3161 token (seal_r0's) presented as an OpenTimestamps proof", subj_r0,
+        base64.b64decode(tokens["seal_r0"]["token_b64"]))
+    ots("real_r0", "the REAL proof: R0's seal, as the calendars alice and bob put it in Bitcoin blocks 972840 and "
+        "972842", subj_r0, base64.b64decode("".join(REAL_OTS_PROOF_B64)))
+    reversed_800001 = dict(syn_headers["800001"])
+    hdr = bytes.fromhex(reversed_800001["header_hex"])
+    hdr = hdr[:36] + hdr[36:68][::-1] + hdr[68:]
+    opentimestamps = {
+        "about": "OpenTimestamps proofs. The real one (real_r0) is described where REAL_OTS_PROOF_B64 is set in "
+                 "generate_vectors.py; its headers are mainnet's, as two explorers gave them. Every other proof leads "
+                 "to a synthetic header (synthetic_header): a test block with no proof of work, holding the proof's "
+                 "result as its Merkle root in the header's own byte order. A header set is what a verifier holds "
+                 "from its own source; header_sources is the policy entry naming that source.",
+        "header_sources": [{"source_ref": "bitcoin-node-v", "network": "mainnet", "kind": "node",
+                            "holder": "Example verifier (test only)"}],
+        "headers": {"mainnet": REAL_OTS_HEADERS, "synthetic": syn_headers,
+                    "synthetic_reversed": {"800001": {"block_hash": sha256(sha256(hdr))[::-1].hex(),
+                                                      "header_hex": hdr.hex()}}},
+        "timestamps": ots_ts,
+        "rfc3161_with_ots_proof": {"about": "an RFC 3161 timestamp whose token is the synthetic OpenTimestamps proof "
+                                            "of R0's seal", "timestamp": {**timestamp(subj_r0, "seal_r0"),
+                                                                   "token_b64": b64(good_r0)}},
+    }
+
     beside_results = {
         "about": "Checkpoint results for a checkpoint carried beside the export, for the pairing cases: cp_a as a "
                  "verifier reports it (index 3, after the three from sources), and cp_a_count_4 reported with its "
@@ -1110,6 +1339,7 @@ def build():
         "beside_results": beside_results,
         "texts": texts,
         "scitt": scitt,
+        "opentimestamps": opentimestamps,
     }
 
 

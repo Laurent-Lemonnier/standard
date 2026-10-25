@@ -15,7 +15,7 @@
       "$ref": "#/$defs/chain_id",
       "description": "The issuer's identifier of the chain the export's entries belong to. A reference: the verifier takes the chain it checks from its own configuration."
     },
-    "timestamps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/timestamp"}},
+    "timestamps": {"type": "array", "minItems": 1, "items": {"oneOf": [{"$ref": "#/$defs/timestamp"}, {"$ref": "#/$defs/ots_timestamp"}]}},
     "checkpoint_refs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/checkpoint_ref"}},
     "checkpoints": {
       "type": "array",
@@ -25,6 +25,19 @@
     }
   },
   "$defs": {
+    "ots_timestamp": {
+      "description": "An independent timestamp by an OpenTimestamps proof: the proof's first digest is the SHA-256 of the exact bytes the subject names, and it leads to a Bitcoin block. It names no authority: the block's header comes from the verifier's own source, which its trust policy names (bitcoin_header_sources), never from the attachment.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assertion", "subject", "hash_algorithm", "format", "proof_b64"],
+      "properties": {
+        "assertion": {"const": "timestamp"},
+        "subject": {"$ref": "#/$defs/subject"},
+        "hash_algorithm": {"const": "SHA-256", "description": "The hash of the subject's bytes the proof starts from."},
+        "format": {"const": "opentimestamps"},
+        "proof_b64": {"$ref": "#/$defs/base64", "description": "The proof's bytes as the OpenTimestamps serialisation writes them (a .ots file)."}
+      }
+    },
     "scitt_statement": {
       "type": "object",
       "additionalProperties": false,
