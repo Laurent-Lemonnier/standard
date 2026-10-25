@@ -258,7 +258,7 @@
           }
         },
         "executed_specifications": {
-          "description": "For each specification attempted, how it was reached: shown to a reviewer and approved, only through an authorised change that no reviewer was shown (and that used up a request of what it changes), or by neither (unbound).",
+          "description": "For each specification attempted, how it was reached: shown to a reviewer and approved, only through an authorised change that no reviewer was shown (and that used up a request of what it changes), only through a request resting on a standing approval (no reviewer was shown it; standing_approvals says whether it was checked against the bounds), or by none of these (unbound).",
           "type": "array",
           "items": {
             "type": "object",
@@ -266,12 +266,42 @@
             "required": ["spec_index", "reached_by"],
             "properties": {
               "spec_index": {"type": "integer", "minimum": 0},
-              "reached_by": {"enum": ["shown_to_reviewer", "via_change_only", "unbound"]}
+              "reached_by": {"enum": ["shown_to_reviewer", "via_change_only", "via_standing_approval", "unbound"]}
             }
           }
         },
+        "standing_approvals": {
+          "description": "One entry for each standing approval the attachment records, when it records any. The bounds dimension says whether the bytes matched their digest and read as well-formed bounds; a request is checked against bounds only when they are verified. requests_recorded counts the requests the attachment records as resting on the approval, not requests run. revocation says whether a revocation is recorded, never that none was given. No one is shown to have looked at any request.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stage_id", "bounds", "requests_recorded", "revocation"],
+            "properties": {
+              "stage_id": {"type": "string", "minLength": 1},
+              "bounds": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["status"],
+                "properties": {
+                  "status": {"enum": ["verified", "failed", "unavailable", "not_checked"]},
+                  "findings": {"$ref": "#/$defs/findings"}
+                }
+              },
+              "requests_recorded": {"type": "integer", "minimum": 0},
+              "max_requests": {"type": "integer", "minimum": 1},
+              "valid_from": {"type": "string", "minLength": 1},
+              "valid_until": {"type": "string", "minLength": 1},
+              "revocation": {"enum": ["recorded", "none_recorded"]},
+              "findings": {"$ref": "#/$defs/findings"}
+            },
+            "if": {"properties": {"bounds": {"properties": {"status": {"const": "verified"}}, "required": ["status"]}}, "required": ["bounds"]},
+            "then": {"required": ["max_requests", "valid_from", "valid_until"]},
+            "else": {"not": {"anyOf": [{"required": ["max_requests"]}, {"required": ["valid_from"]}, {"required": ["valid_until"]}]}}
+          }
+        },
         "record_statements": {"$ref": "#/$defs/check", "description": "The stages' statements about core fields, against the decision record. not_checked when the verifier does not hold the record, when an approval names no core field (the record does not show it), or when a review_log outcome is a word the check does not know."},
-        "action_binding": {"$ref": "#/$defs/check", "description": "Shown, approved, requested and attempted digests agree, or are joined by an authorised change."},
+        "action_binding": {"$ref": "#/$defs/check", "description": "Shown, approved, requested and attempted digests agree, or are joined by an authorised change, or each request under a standing approval is inside its verified bounds. not_checked when a request rests on bounds that could not be read, and nothing failed."},
         "stage_order": {
           "type": "object",
           "additionalProperties": false,
@@ -307,6 +337,14 @@
             "required": ["executed_specifications"]
           },
           "then": {"properties": {"action_binding": {"properties": {"status": {"const": "failed"}}}}}
+        },
+        {
+          "description": "Bounds that are not verified leave the requests resting on them unchecked: the binding is not verified.",
+          "if": {
+            "properties": {"standing_approvals": {"contains": {"properties": {"bounds": {"properties": {"status": {"not": {"const": "verified"}}}, "required": ["status"]}}, "required": ["bounds"]}}},
+            "required": ["standing_approvals"]
+          },
+          "then": {"properties": {"action_binding": {"properties": {"status": {"enum": ["not_checked", "failed"]}}}}}
         }
       ]
     },

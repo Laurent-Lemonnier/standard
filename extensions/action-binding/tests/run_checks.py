@@ -11,7 +11,8 @@ Runs the cases in cases.json over the values in vectors.json, which generate_vec
                    the texts that name a member twice
   digest cases     SHA-256 over exact bytes: action specifications (changes and re-serialisation), and the seal of
                    the affirmed fixture record
-  binding cases    the reference check of one attachment's stages, with or without its decision record
+  binding cases    the reference check of one attachment's stages, with or without its decision record; under a
+                   standing approval, each request against the bounds read from their exact bytes
   signature cases  the reference check of one attachment's issuer signature: the copy of the signatures 0.2.0
                    organisation seal of kind attachment, with the key the trust policy gives, its state when it
                    signed, and the independent timestamps over its value from the signatures attachment read beside
@@ -68,9 +69,19 @@ DIMENSIONS = (
     "specification_digests", "specification_statements", "record_statements", "action_binding",
     "stage_order", "authorisation_recheck", "observed_results", "rationale_provenance",
 )
-CARRIED = ("observed", "executed", "reviews")  # compared in a binding case only when it lists them
+CARRIED = ("observed", "executed", "reviews", "standing")  # compared in a binding case only when it lists them
 RANK = {"verified": 0, "not_checked": 1, "unavailable": 2, "failed": 3}
-REFS = ("proposal_ref", "review_ref", "from_ref", "authorised_by", "request_ref", "recheck_ref", "attempt_ref")
+REFS = ("proposal_ref", "review_ref", "from_ref", "authorised_by", "request_ref", "recheck_ref", "attempt_ref",
+        "revokes_ref")
+# The bounds of a standing approval: exactly these members, read as the text defines them.
+BOUNDS_MEMBERS = ("operation", "target", "policy_version", "input_version_refs", "parameters", "max_requests",
+                  "valid_from", "valid_until")
+STANDING_CAVEATS = [
+    "requests_recorded counts the requests this attachment records as resting on the approval, not requests run",
+    "the period is checked against the issuer's times",
+    "no revocation recorded shows only that: not that none was given",
+    "no one is shown to have looked at any request made under the approval",
+]
 ZEROED = '"seal_hash":"' + "0" * 64 + '"'
 NOT_ASSESSED = ["legal_requirements", "conformance_level", "events_not_in_attachment", "truth_of_recorded_claims",
                 "what_the_reviewer_saw"]
@@ -144,13 +155,162 @@ def check_specification(spec):
     return digest, ("verified", [])
 
 
+# ---------------------------------------------------------------- the bounds of a standing approval
+
+def json_int(v):
+    """A value written as a JSON integer: never a boolean, never a number with a fraction or an exponent."""
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def scalar(v):
+    """A value a constraint may name or compare: a string, a JSON integer, a boolean or null. Never a float."""
+    return v is None or isinstance(v, (str, bool)) or json_int(v)
+
+
+def same_value(a, b):
+    """Equal as JSON values of one kind: 1 and true are not the same, nor 1 and 1.0."""
+    return scalar(a) and scalar(b) and type(a) is type(b) and a == b
+
+
+def instant_with_offset(text):
+    """The instant a time names, or None when it is not a time with an offset."""
+    if not isinstance(text, str):
+        return None
+    try:
+        t = when(text)
+    except ValueError:
+        return None
+    return t if t.tzinfo is not None else None
+
+
+def bounds_problems(b):
+    """Why a value is not well-formed bounds: exactly the members the text names, each of its form, every
+    constraint one of the four kinds. An empty list means well formed."""
+    if not isinstance(b, dict):
+        return ["not a JSON object"]
+    bad = [f"missing member {m}" for m in BOUNDS_MEMBERS if m not in b]
+    bad += [f"member {m} is not one the bounds may carry" for m in b if m not in BOUNDS_MEMBERS]
+    if bad:
+        return bad
+    for m in ("operation", "target", "policy_version"):
+        if not isinstance(b[m], str) or not b[m].strip():
+            bad.append(f"{m} is not a non-empty string")
+    refs = b["input_version_refs"]
+    if not isinstance(refs, list) or any(not isinstance(r, str) or not r.strip() for r in refs):
+        bad.append("input_version_refs is not a list of non-empty strings")
+    if not isinstance(b["parameters"], dict):
+        bad.append("parameters is not an object")
+    else:
+        for name, c in b["parameters"].items():
+            keys = set(c) if isinstance(c, dict) else None
+            if keys == {"exact"}:
+                ok = scalar(c["exact"])
+            elif keys == {"one_of"}:
+                values = c["one_of"]
+                ok = (isinstance(values, list) and values and all(scalar(x) for x in values)
+                      and len({(type(x).__name__, x) for x in values}) == len(values))
+            elif keys == {"max_length"}:
+                ok = json_int(c["max_length"]) and c["max_length"] >= 0
+            elif keys and keys <= {"min", "max"}:
+                ok = all(json_int(c[k]) for k in keys) and ("min" not in c or "max" not in c or c["min"] <= c["max"])
+            else:
+                ok = False
+            if not ok:
+                bad.append(f"parameter {name}: not one constraint of the four kinds, with values of their form")
+    if not json_int(b["max_requests"]) or b["max_requests"] < 1:
+        bad.append("max_requests is not a JSON integer of at least 1")
+    start, end = instant_with_offset(b["valid_from"]), instant_with_offset(b["valid_until"])
+    if start is None or end is None:
+        bad.append("valid_from or valid_until is not a time with an offset")
+    elif start > end:
+        bad.append("valid_until is before valid_from")
+    return bad
+
+
+def read_bounds(stage):
+    """The bounds' bytes against bounds_digest, then read as bounds. Returns the status, its findings and the bounds
+    (None unless verified). Unavailable or unreadable bytes mean the requests are not checked against them;
+    bytes that do not match their digest, or that are not well-formed bounds, fail."""
+    content = stage["bounds"]
+    if content["availability"] != "available":
+        return "unavailable", ["the bounds' bytes are unavailable"], None
+    raw = base64.b64decode(content["bytes_b64"], validate=True)
+    if sha256(raw) != stage["bounds_digest"]:
+        return "failed", ["the bytes do not match bounds_digest"], None
+    try:
+        body = strict_json(raw)
+    except ValueError as exc:
+        return "not_checked", [f"the bounds cannot be read: {exc}"], None
+    problems = bounds_problems(body)
+    if problems:
+        return "failed", ["the bounds are not well formed: " + "; ".join(problems)], None
+    return "verified", [], body
+
+
+def spec_body(spec):
+    """The specification's bytes read as a JSON object, or None with the reason they cannot be."""
+    if spec["content"]["availability"] != "available":
+        return None, "the bytes are unavailable"
+    raw = base64.b64decode(spec["content"]["bytes_b64"], validate=True)
+    if sha256(raw) != spec["spec_digest"]:
+        return None, "the bytes do not match spec_digest"
+    if spec["representation"]["media_type"] not in READABLE:
+        return None, "this check cannot read the media type"
+    try:
+        body = strict_json(raw)
+    except ValueError as exc:
+        return None, f"the bytes cannot be read: {exc}"
+    if not isinstance(body, dict):
+        return None, "the bytes are not a JSON object"
+    return body, None
+
+
+def outside_bounds(body, b):
+    """Why a specification is outside well-formed bounds. Closed: a member or a parameter the bounds do not name
+    puts it outside; so does a parameter the bounds name and the specification lacks. An empty list means inside."""
+    bad = [f"member {m} is not named by the bounds" for m in body if m not in SPEC_MEMBERS]
+    bad += [f"member {m} is missing" for m in SPEC_MEMBERS if m not in body]
+    if bad:
+        return bad
+    for m in ("operation", "target", "policy_version"):
+        if body[m] != b[m]:
+            bad.append(f"{m} is not the bounds'")
+    refs = body["input_version_refs"]
+    if not isinstance(refs, list):
+        bad.append("input_version_refs is not a list")
+    else:
+        bad += [f"input_version_refs names {r!r}, which the bounds do not allow" for r in refs if r not in b["input_version_refs"]]
+    params = body["parameters"]
+    if not isinstance(params, dict):
+        return bad + ["parameters is not an object"]
+    bad += [f"parameter {p} is not named by the bounds" for p in params if p not in b["parameters"]]
+    bad += [f"parameter {p}, named by the bounds, is missing" for p in b["parameters"] if p not in params]
+    for name, c in b["parameters"].items():
+        if name not in params:
+            continue
+        v = params[name]
+        if "exact" in c:
+            ok = same_value(v, c["exact"])
+        elif "one_of" in c:
+            ok = any(same_value(v, x) for x in c["one_of"])
+        elif "max_length" in c:
+            ok = isinstance(v, str) and len(v) <= c["max_length"]  # length in Unicode code points
+        else:
+            ok = json_int(v) and c.get("min", v) <= v <= c.get("max", v)
+        if not ok:
+            bad.append(f"parameter {name} is outside its constraint")
+    return bad
+
+
 def check_record(att, record_raw):
     """The stages' statements about core fields, against the decision record the verifier holds.
 
-    Verified only when every approval is backed by a core field and every backed statement matches. A matching
-    decision_id shows consistency only: a verifier usually finds the record by that same id."""
+    Verified only when every approval, standing approvals included, is backed by a core field and every backed
+    statement matches. A matching decision_id shows consistency only: a verifier usually finds the record by that
+    same id."""
     unbacked = [f"{s['stage_id']}: no core field backs this approval; the record does not show it"
-                for s in att["stages"] if s["kind"] == "outcome" and s["outcome"] == "approved" and "core_ref" not in s]
+                for s in att["stages"] if "core_ref" not in s and
+                (s["kind"] == "standing_approval" or (s["kind"] == "outcome" and s["outcome"] == "approved"))]
     if record_raw is None:
         return "not_checked", ["the decision record was not supplied"] + unbacked
     try:
@@ -166,7 +326,7 @@ def check_record(att, record_raw):
         if s["kind"] == "proposal" and s["origin"] == "ai":
             if (record.get("drafting_authority") or {}).get("deployer_role_pointer") != s["deployer_role_pointer"]:
                 wrong.append(f"{s['stage_id']}: drafting_authority")
-        if s["kind"] != "outcome" or "core_ref" not in s:
+        if s["kind"] not in ("outcome", "standing_approval") or "core_ref" not in s:
             continue
         ref = s["core_ref"]
         if ref["field"] == "affirmation_record":
@@ -192,7 +352,7 @@ def check_record(att, record_raw):
                     wrong.append(name)
             elif core_key == "outcome" and value not in KNOWN_OUTCOMES:
                 unread.append(f"{name}: {value!r} is not a word this check knows")
-            elif value != s[stage_key]:
+            elif value != s.get(stage_key, "approved"):  # a standing approval is an approval
                 wrong.append(name)
     if wrong:
         return "failed", ["does not match the decision record: " + ", ".join(wrong)] + unread
@@ -211,7 +371,8 @@ def check_attachment(att, record_raw=None):
             continue
         pos[s["stage_id"]], by_id[s["stage_id"]] = i, s
     kinds = {k: [s for s in stages if s["kind"] == k] for k in
-             ("proposal", "review", "outcome", "change_authorisation", "request", "recheck", "attempt", "result")}
+             ("proposal", "review", "outcome", "standing_approval", "standing_revocation", "change_authorisation",
+              "request", "recheck", "attempt", "result")}
     out = {}
 
     # Specifications: each digest, and each summary, on its own; the dimension keeps the worst status.
@@ -244,7 +405,9 @@ def check_attachment(att, record_raw=None):
         shown, editor = "proposal_not_named", None
         if "proposal_ref" in s:
             proposal = ref(s, "proposal_ref", ("proposal",))
-            if proposal and proposal["spec_digest"] == s["shown_spec_digest"]:
+            if proposal and "shown_bounds_digest" in s:
+                bad.append(f"{s['stage_id']}: shown bounds, and names a proposal; a proposal proposes a specification")
+            elif proposal and proposal["spec_digest"] == s["shown_spec_digest"]:
                 shown = "as_proposed"
             elif proposal:
                 shown, editor = "differs_from_proposal", s.get("edited_by")
@@ -273,10 +436,13 @@ def check_attachment(att, record_raw=None):
             backing.setdefault(field, s["stage_id"])
         if review and s["actor_ref"] != review["reviewer_ref"]:
             bad.append(f"{s['stage_id']}: the outcome is not given by the person shown the specification")
-        if s["outcome"] != "approved" and review:
+        if s["outcome"] != "approved" and review and "shown_spec_digest" in review:
             refused.setdefault(review["shown_spec_digest"], (s["stage_id"], s["outcome"]))
         if s["outcome"] == "approved":
-            if review and s["approved_spec_digest"] != review["shown_spec_digest"]:
+            if review and "shown_bounds_digest" in review:
+                bad.append(f"{s['stage_id']}: approves bounds as an outcome; an approval of bounds is a "
+                           "standing_approval stage, which says what it does not show")
+            elif review and s["approved_spec_digest"] != review["shown_spec_digest"]:
                 bad.append(f"{s['stage_id']}: the approved specification differs from the one shown")
             elif review:
                 shown_approved.add(s["approved_spec_digest"])
@@ -286,6 +452,42 @@ def check_attachment(att, record_raw=None):
     machine |= {q["requested_by"] for q in kinds["request"]} | {x["executor_ref"] for x in kinds["attempt"]}
     machine.discard(None)
     changed, users = set(), {}  # users: approval or change -> the changes and requests that use it, in order
+
+    # A standing approval: a named person, shown the bounds' digest, approved the bounds once. The bounds are read
+    # from their bytes; what the stage says outside them is not what a request is checked against.
+    standing, unchecked, under_standing = {}, [], set()
+    for s in kinds["standing_approval"]:
+        review = ref(s, "review_ref", ("review",))
+        if s["review_ref"] in answered:
+            bad.append(f"{s['stage_id']}: {s['review_ref']} already has an outcome ({answered[s['review_ref']]}); "
+                       "a review has one outcome")
+        answered.setdefault(s["review_ref"], s["stage_id"])
+        if "core_ref" in s:
+            field = (s["core_ref"]["field"], s["core_ref"].get("index"))
+            if field in backing:
+                bad.append(f"{s['stage_id']}: {s['core_ref']['field']} already backs {backing[field]}; "
+                           "a core field backs at most one outcome")
+            backing.setdefault(field, s["stage_id"])
+        if review and "shown_bounds_digest" not in review:
+            bad.append(f"{s['stage_id']}: answers a review that was shown a specification, not the bounds")
+        elif review and review["shown_bounds_digest"] != s["bounds_digest"]:
+            bad.append(f"{s['stage_id']}: the approved bounds differ from the ones shown")
+        if review and s["actor_ref"] != review["reviewer_ref"]:
+            bad.append(f"{s['stage_id']}: the standing approval is not given by the person shown the bounds")
+        if s["actor_ref"] in machine:
+            bad.append(f"{s['stage_id']}: given by {s['actor_ref']}, which proposed, requested or executes the "
+                       "action; a standing approval is given by a named person")
+        status, findings, body = read_bounds(s)
+        standing[s["stage_id"]] = {"status": status, "findings": findings, "body": body, "requests": [],
+                                   "revoked": None}
+    for s in kinds["standing_revocation"]:
+        target = ref(s, "revokes_ref", ("standing_approval",))
+        if target is None:
+            continue
+        entry = standing[target["stage_id"]]
+        mark = (pos[s["stage_id"]], when(s["at"]), s["stage_id"])
+        if entry["revoked"] is None or mark < entry["revoked"]:
+            entry["revoked"] = mark
 
     def use(s, auth_id):
         limit = bound[auth_id][1]
@@ -301,6 +503,9 @@ def check_attachment(att, record_raw=None):
         if s["spec_digest"] in refused:
             bad.append(f"{s['stage_id']}: reaches a specification that {refused[s['spec_digest']][0]} "
                        f"{refused[s['spec_digest']][1]}; overriding that needs a new review")
+        if s["from_ref"] in standing:
+            bad.append(f"{s['stage_id']}: starts from {s['from_ref']}, a standing approval; no change starts from one")
+            continue
         source = ref(s, "from_ref", ("outcome", "change_authorisation"))
         if source is None:
             continue
@@ -317,8 +522,43 @@ def check_attachment(att, record_raw=None):
         if s["request_id"] in seen_ids:
             bad.append(f"{s['stage_id']}: duplicate request_id {s['request_id']!r}")
         seen_ids.add(s["request_id"])
-        auth = ref(s, "authorised_by", ("outcome", "change_authorisation"))
+        auth = ref(s, "authorised_by", ("outcome", "change_authorisation", "standing_approval"))
         if auth is None:
+            continue
+        if auth["kind"] == "standing_approval":
+            # Under a standing approval: in the period, within the count, not after a recorded revocation, not a
+            # specification a reviewer refused, and inside the bounds, which must have been read.
+            entry = standing[auth["stage_id"]]
+            entry["requests"].append(s["stage_id"])
+            under_standing.add(s["spec_digest"])
+            if entry["revoked"] and (pos[s["stage_id"]] > entry["revoked"][0] or when(s["at"]) > entry["revoked"][1]):
+                bad.append(f"{s['stage_id']}: rests on {auth['stage_id']} after {entry['revoked'][2]} revoked it")
+            if s["spec_digest"] in refused:
+                bad.append(f"{s['stage_id']}: reaches a specification that {refused[s['spec_digest']][0]} "
+                           f"{refused[s['spec_digest']][1]}; overriding that needs a new review")
+            if entry["status"] == "failed":  # bytes that are not the bounds' digest, or not bounds: the request fails
+                bad.append(f"{s['stage_id']}: rests on {auth['stage_id']}, whose bounds fail: " + "; ".join(entry["findings"]))
+                continue
+            if entry["status"] != "verified":  # unavailable or unreadable: not checked, never "inside"
+                unchecked.append(f"{s['stage_id']}: not checked against the bounds of {auth['stage_id']}: "
+                                 + "; ".join(entry["findings"]))
+                continue
+            b = entry["body"]
+            if not when(b["valid_from"]) <= when(s["at"]) <= when(b["valid_until"]):
+                bad.append(f"{s['stage_id']}: dated outside the period of {auth['stage_id']} "
+                           f"({b['valid_from']} to {b['valid_until']})")
+            if len(entry["requests"]) > b["max_requests"]:
+                bad.append(f"{s['stage_id']}: {auth['stage_id']} covers {b['max_requests']} request(s), already used "
+                           f"by {', '.join(entry['requests'][:-1])}")
+            i = index.get(s["spec_digest"])
+            body, reason = (None, "the attachment does not carry it") if i is None else spec_body(
+                att["action_specifications"][i])
+            if body is None:
+                unchecked.append(f"{s['stage_id']}: the specification cannot be checked against the bounds: {reason}")
+            else:
+                outside = outside_bounds(body, b)
+                if outside:
+                    bad.append(f"{s['stage_id']}: outside the bounds of {auth['stage_id']}: " + "; ".join(outside))
             continue
         if auth["stage_id"] not in bound:
             bad.append(f"{s['stage_id']}: rests on {auth['stage_id']} ({auth.get('outcome', 'unbound change')}); only "
@@ -328,9 +568,10 @@ def check_attachment(att, record_raw=None):
         if s["spec_digest"] != bound[auth["stage_id"]][0]:
             bad.append(f"{s['stage_id']}: the requested specification differs from the one approved")
     # However many approvals and changes bind a specification, its requests number at most the largest limit.
+    # Requests under a standing approval are counted against its own max_requests, above, not here.
     for d in dict.fromkeys(q["spec_digest"] for q in kinds["request"]):
         limits = [limit for digest, limit in bound.values() if digest == d]
-        count = sum(q["spec_digest"] == d for q in kinds["request"])
+        count = sum(q["spec_digest"] == d and q["authorised_by"] in bound for q in kinds["request"])
         if limits and count > max(limits):
             bad.append(f"specification {index.get(d)}: requested {count} times; the most any approval or change "
                        f"of it covers is {max(limits)}")
@@ -338,16 +579,23 @@ def check_attachment(att, record_raw=None):
         request = ref(s, "request_ref", ("request",))
         if request and s["spec_digest"] != request["spec_digest"]:
             bad.append(f"{s['stage_id']}: the attempted specification differs from the one requested")
-    out["action_binding"] = ("failed", bad) if bad else ("verified", [])
+    # Bounds that could not be read leave their requests unchecked: not verified, never "inside".
+    out["action_binding"] = (("failed", bad + unchecked) if bad else ("not_checked", unchecked) if unchecked
+                             else ("verified", []))
+    out["standing"] = [[sid, e["status"], len(e["requests"]), e["body"]["max_requests"] if e["body"] else None,
+                        "recorded" if e["revoked"] else "none_recorded"] for sid, e in standing.items()]
+    out["standing_detail"] = standing
 
-    # Each executed specification: shown to a reviewer and approved, or reached only through a change.
+    # Each executed specification: shown to a reviewer and approved, reached only through a change, or only through
+    # a request under a standing approval (the standing entry says whether it was checked against the bounds).
     executed = []
     for s in kinds["attempt"]:
         i = index.get(s["spec_digest"])
         if i is None or any(e[0] == i for e in executed):
             continue
         reached = ("shown_to_reviewer" if s["spec_digest"] in shown_approved else
-                   "via_change_only" if s["spec_digest"] in changed else "unbound")
+                   "via_change_only" if s["spec_digest"] in changed else
+                   "via_standing_approval" if s["spec_digest"] in under_standing else "unbound")
         executed.append([i, reached])
     out["executed"] = executed
 
@@ -375,6 +623,14 @@ def check_attachment(att, record_raw=None):
             bad.append(f"{s['stage_id']}: the recheck comes after the attempt")
         if rc["result"] != "authorised":
             bad.append(f"{s['stage_id']}: attempted after a recheck that found {rc['result']}")
+        # The live state of a standing approval comes from the recheck; a recheck that authorised a request after
+        # the issuer's own record of a revocation contradicts that record.
+        request = by_id.get(s["request_ref"])
+        entry = standing.get(request["authorised_by"]) if request and request["kind"] == "request" else None
+        if (entry and entry["revoked"] and rc["result"] == "authorised"
+                and (pos[rc["stage_id"]] > entry["revoked"][0] or when(rc["at"]) > entry["revoked"][1])):
+            bad.append(f"{s['stage_id']}: the recheck authorised a request under {request['authorised_by']} after "
+                       f"{entry['revoked'][2]} revoked it")
         later = [r for r in kinds["recheck"] if r["request_ref"] == s["request_ref"]
                  and pos[rc["stage_id"]] < pos.get(r["stage_id"], -1) < pos[s["stage_id"]]]
         if any(r["result"] != "authorised" for r in later):
@@ -415,7 +671,7 @@ def check_attachment(att, record_raw=None):
 
     # Rationale: a rationale recorded after its outcome is never presented as contemporaneous.
     bad = []
-    for s in kinds["outcome"] + kinds["change_authorisation"]:
+    for s in kinds["outcome"] + kinds["change_authorisation"] + kinds["standing_approval"] + kinds["standing_revocation"]:
         r = s["rationale"]
         if r["timing"] == "contemporaneous" and when(r["recorded_at"]) > when(s["at"]):
             bad.append(f"{s['stage_id']}: recorded after the outcome, presented as contemporaneous")
@@ -538,6 +794,19 @@ def with_findings(status, findings):
     return out
 
 
+def standing_entry(stage_id, e):
+    """One standing approval in the report: the bounds as read, the requests recorded, the period and the count the
+    bounds state when they were read, whether a revocation is recorded, and what none of this shows."""
+    out = {"stage_id": stage_id, "bounds": with_findings(e["status"], e["findings"]),
+           "requests_recorded": len(e["requests"])}
+    if e["body"] is not None:
+        out.update({"max_requests": e["body"]["max_requests"], "valid_from": e["body"]["valid_from"],
+                    "valid_until": e["body"]["valid_until"]})
+    out["revocation"] = "recorded" if e["revoked"] else "none_recorded"
+    out["findings"] = list(STANDING_CAVEATS)
+    return out
+
+
 def result_for(i, att, record_raw, policy, policy_result, ts_results):
     got = check_attachment(att, record_raw)
     signature = check_issuer_signature(att, policy, policy_result, ts_results)
@@ -560,6 +829,8 @@ def result_for(i, att, record_raw, policy, policy_result, ts_results):
                                             **({"basis": x[2]} if x[2] else {})} for x in got["observed"]],
                               **({"findings": got["observed_results"][1]} if got["observed_results"][1] else {})},
          "rationale_provenance": with_findings(*got["rationale_provenance"]),
+         **({"standing_approvals": [standing_entry(sid, e) for sid, e in got["standing_detail"].items()]}
+            if got["standing_detail"] else {}),
          "identity_assurance": {"status": "not_checked", "basis": "issuer_assertion"},
          "authority_assurance": {"status": "not_checked", "basis": "issuer_assertion"},
          "time_assurance": time_assurance(att, signature, ts_results),
@@ -658,6 +929,8 @@ def read_with_attachments(report, attachments, records, policy, beside):
             problems.append(f"result {i}: executed specifications not reported as they were reached")
         if r["reviews"] != x["reviews"]:
             problems.append(f"result {i}: reviews not reported as the attachment records them")
+        if "standing_approvals" in r and r["standing_approvals"] != x.get("standing_approvals", []):
+            problems.append(f"result {i}: standing approvals not reported as the reference check finds them")
         s, xs = r["issuer_signature"], x["issuer_signature"]
         if "issuer_signature" not in a and s["status"] != "not_checked":
             problems.append(f"result {i}: the attachment carries no issuer signature; it is reported {s['status']}")
@@ -822,6 +1095,15 @@ def digest_case(c, v, data):
                 if raw != specs[carries[i]]["text"].encode() or sha256(raw) != spec["spec_digest"]:
                     problems.append(f"{name} specification {i}")
         return ("mismatch" if problems else "match"), "; ".join(problems)
+    if c["check"] == "bounds_digests":
+        bad = [k for k, b in data["bounds"].items() if sha256(b["text"].encode()) != b["bounds_digest"]]
+        return ("mismatch" if bad else "match"), ", ".join(bad)
+    if c["check"] == "bounds_carried":
+        stage = v["attachments"][c["attachment"]]["stages"][c["stage"]]
+        raw = base64.b64decode(stage["bounds"]["bytes_b64"], validate=True)
+        b = data["bounds"][c["bounds"]]
+        ok = raw == b["text"].encode() and sha256(raw) == stage["bounds_digest"] == b["bounds_digest"]
+        return ("match" if ok else "mismatch"), ""
     if c["check"] == "record_seal":
         # As the repository's governance records are sealed: SHA-256 of the whole record with the seal_hash value
         # replaced by 64 zeros (portable verification's seal_hash_zeroed).
