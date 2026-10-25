@@ -1140,7 +1140,9 @@ def ots_read(raw):
 
 def ots_attestations(tree, digest):
     """Replay the tree from the digest: [(kind, value, message)] for each attestation, kind bitcoin (value the height),
-    pending (value the calendar's text) or unknown (skipped, by its length, as read)."""
+    pending (value the calendar's text) or unknown (skipped, by its length, as read). The message is kept only where
+    it can match a header's Merkle root: for a Bitcoin attestation whose result is 32 bytes; otherwise None, so that a
+    proof whose every leaf ends in an attestation does not hold every leaf's message at once."""
     out, stack = [], [(tree, None, b"", digest)]
     while stack:
         node, tag, arg, parent = stack.pop()
@@ -1154,25 +1156,25 @@ def ots_attestations(tree, digest):
                 # form, and at most OTS_MAX_HEIGHT. Each rule gives its own reason.
                 if len(payload) > OTS_MAX_VARUINT_BYTES:
                     out.append(("bitcoin_refused", f"a Bitcoin attestation's height is a varint of {len(payload)} "
-                                f"bytes, over the limit of {OTS_MAX_VARUINT_BYTES}", msg))
+                                f"bytes, over the limit of {OTS_MAX_VARUINT_BYTES}", None))
                     continue
                 ends = [p for p, b in enumerate(payload) if not b & 0x80]
                 if not payload or ends != [len(payload) - 1]:
-                    out.append(("bitcoin_refused", "a Bitcoin attestation's payload is not exactly one varint", msg))
+                    out.append(("bitcoin_refused", "a Bitcoin attestation's payload is not exactly one varint", None))
                     continue
                 if len(payload) > 1 and payload[-1] == 0:
-                    out.append(("bitcoin_refused", "a Bitcoin attestation's height is not in its shortest form", msg))
+                    out.append(("bitcoin_refused", "a Bitcoin attestation's height is not in its shortest form", None))
                     continue
                 height = sum((b & 0x7f) << (7 * p) for p, b in enumerate(payload))
                 if height > OTS_MAX_HEIGHT:
                     out.append(("bitcoin_refused", f"a Bitcoin attestation's height {height} is beyond what a report "
-                                "can carry (2^53 - 1)", msg))
+                                "can carry (2^53 - 1)", None))
                     continue
-                out.append(("bitcoin", height, msg))
+                out.append(("bitcoin", height, msg if len(msg) == 32 else None))
             elif tag8 == OTS_PENDING:
-                out.append(("pending", payload, msg))
+                out.append(("pending", payload, None))
             else:
-                out.append(("unknown", tag8.hex(), msg))
+                out.append(("unknown", tag8.hex(), None))
         for (tag, arg), child in node["ops"].items():
             stack.append((child, tag, arg, msg))
     return out
@@ -1230,7 +1232,7 @@ def check_ots(ts, policy, out, subject_check, value, headers):
             findings.append("no header is held from a source the trust policy names")
         else:
             results = []
-            for height, msg in sorted(bitcoin):
+            for height, msg in sorted(bitcoin, key=lambda b: b[0]):
                 hdr_hex = held.get("headers", {}).get(str(height))
                 if hdr_hex is None:
                     results.append((height, "unavailable", msg, None))
@@ -1238,7 +1240,7 @@ def check_ots(ts, policy, out, subject_check, value, headers):
                 hdr = bytes.fromhex(hdr_hex) if isinstance(hdr_hex, str) and len(hdr_hex) == 160 else None
                 if hdr is None:
                     results.append((height, "failed", msg, None))
-                elif hdr[36:68] == msg:
+                elif msg is not None and hdr[36:68] == msg:
                     results.append((height, "verified", msg, hdr))
                 else:
                     results.append((height, "failed", msg, hdr))
@@ -1259,7 +1261,7 @@ def check_ots(ts, policy, out, subject_check, value, headers):
                 for height, status, msg, hdr in results:
                     if status == "failed":
                         hint = (" (it matches only in the reverse byte order, as explorers show the root)"
-                                if hdr is not None and hdr[36:68] == msg[::-1] else "")
+                                if hdr is not None and msg is not None and hdr[36:68] == msg[::-1] else "")
                         findings.append(f"the header held for block {height} does not hold the proof's result as "
                                         f"its Merkle root{hint}")
             else:
