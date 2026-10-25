@@ -23,8 +23,8 @@ Another format may cite a document of the Standard by a typed digest reference: 
 
 | Name | Identifies | Digest |
 |---|---|---|
-| `org.decisionprovenancestandard.decision_record` | one decision record, as closed by its seal | the record's seal, `seal_hash` (Core §5.1(3), §6.2): SHA-256 over the covered bytes, as [portable verification](portable-verification/) carries them (its items 3 and 4), in lowercase hexadecimal; the same value as the entry's `seal_hash` |
-| `org.decisionprovenancestandard.action_binding_attachment` | one action-binding attachment, as issued | the plain SHA-256 of the attachment's bytes as issued, in lowercase hexadecimal: the `attachment_digest` the [action binding](action-binding/) report states; not the sealed digest, which the signatures profile computes with the signature value replaced |
+| `org.decisionprovenancestandard.decision_record` | one decision record, as closed by its seal | the record's seal, `seal_hash` (Core §5.1(3), §6.2): SHA-256 over the covered bytes, as [portable verification](portable-verification/) 0.3.0 carries them (its items 3 and 4, the same since 0.1.0), in lowercase hexadecimal; the same value as the entry's `seal_hash` |
+| `org.decisionprovenancestandard.action_binding_attachment` | one action-binding attachment, as issued | the plain SHA-256 of the attachment's bytes, in lowercase hexadecimal, computed as the [action binding](action-binding/) 0.3.0 report computes its `attachment_digest`; not the sealed digest, which the signatures profile computes with the signature value replaced |
 
-How a reference is carried in another format, its member names and its purpose values, is that format's matter and is not defined here. A reference that verifies shows that the cited bytes are the document named, and nothing about what the document states: that is for the document's own check, which reports it.
+How a reference is carried in another format, its member names and its purpose values, is that format's matter and is not defined here. A reference that verifies shows only that the cited bytes have the digest it carries. It does not show that they are a decision record or an attachment, which one they are, or anything they state: that is for the document's own check, which reports it.
 
