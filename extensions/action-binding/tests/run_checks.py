@@ -773,6 +773,16 @@ def latest_stage_time(att):
         return None
 
 
+def shown_time(t, att):
+    """A stage time as a finding prints it: in UTC, or as the attachment writes it where its UTC date falls after the
+    year 9999 or before the year 1. The pattern accepts such a time (9999-12-31T23:00:00-05:00) and it is a real
+    instant, but no UTC date holds it."""
+    try:
+        return sig.iso(t)
+    except OverflowError:
+        return next(s["at"] for s in att["stages"] if instant_with_offset(s["at"]) == t)
+
+
 def check_issuer_signature(att, policy, policy_result, ts_results):
     """The copy of the seal as one dimension: the signatures check of the seal built from the attachment (the
     signature, then the key's state when it signed), with the holder the policy gives. It attests only that the
@@ -801,7 +811,7 @@ def check_issuer_signature(att, policy, policy_result, ts_results):
     stated, latest = sig.instant(s["sealed_at"]), latest_stage_time(att)
     if stated is not None and latest is not None and stated < latest:
         out.setdefault("findings", []).append(f"sealed_at {s['sealed_at']} is earlier than the latest stage the "
-                                              f"attachment records ({sig.iso(latest)}); both are the issuer's times")
+                                              f"attachment records ({shown_time(latest, att)}); both are the issuer's times")
     return out
 
 
@@ -826,7 +836,7 @@ def time_assurance(att, signature, ts_results):
     # inconsistent with the timestamp. A finding, not a failure: the times are the issuer's statements.
     latest = latest_stage_time(att)
     if latest is not None and latest > r["_upper"]:
-        findings.append(f"the attachment records a stage at {sig.iso(latest)}, later than {t}, by which its signed "
+        findings.append(f"the attachment records a stage at {shown_time(latest, att)}, later than {t}, by which its signed "
                         "bytes existed: the issuer's stage times are inconsistent with the timestamp")
     return {"status": "verified", "basis": "independent_source", "source_ref": r["tsa_ref"], "no_later_than": t,
             "timestamp_index": i, "findings": findings}
