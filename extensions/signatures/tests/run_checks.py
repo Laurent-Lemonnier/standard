@@ -131,14 +131,8 @@ def strict_json(raw):
     def constant(name):
         raise ValueError(f"not JSON: {name}")
 
-    def finite(text):  # 1e400 is a number JSON allows to be written; read as a float it is infinite, so not read
-        value = float(text)
-        if value != value or value in (float("inf"), float("-inf")):
-            raise ValueError(f"not a finite number: {text}")
-        return value
-
     try:
-        return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=constant, parse_float=finite)
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=constant)
     except RecursionError:  # nested deeper than this reader goes: not readable, like any other unreadable value
         raise ValueError("nested too deep to read") from None
 

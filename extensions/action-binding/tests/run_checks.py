@@ -81,7 +81,9 @@ STANDING_CAVEATS = [
     "the period is checked against the issuer's times",
     "no revocation recorded shows only that: not that none was given",
     "no one is shown to have looked at any request made under the approval",
+    "a standing approval approves nothing in any legal sense; the records stay input, not evidence",
 ]
+MAX_INT = 2 ** 53 - 1  # I-JSON (RFC 7493 §2.2): the integers every reader gives exactly, doubles included
 ZEROED = '"seal_hash":"' + "0" * 64 + '"'
 NOT_ASSESSED = ["legal_requirements", "conformance_level", "events_not_in_attachment", "truth_of_recorded_claims",
                 "what_the_reviewer_saw"]
@@ -158,8 +160,23 @@ def check_specification(spec):
 # ---------------------------------------------------------------- the bounds of a standing approval
 
 def json_int(v):
-    """A value written as a JSON integer: never a boolean, never a number with a fraction or an exponent."""
-    return isinstance(v, int) and not isinstance(v, bool)
+    """A value written as a JSON integer from -(2^53-1) to 2^53-1, as I-JSON has it: never a boolean, never a number
+    with a fraction or an exponent, never one a reader using doubles would round (9007199254740993 reads as
+    9007199254740992 there, so a bound on it would be inside for one verifier and outside for another)."""
+    return isinstance(v, int) and not isinstance(v, bool) and -MAX_INT <= v <= MAX_INT
+
+
+def finite(v):
+    """No number anywhere in v read as infinite or not a number. 1e400 is a number JSON allows to be written; the
+    shared reader takes it as infinity, which nothing can be compared with. Only the bounds are refused for it,
+    as item 13 says: the shared reader is the signatures profile's, and documents it read before read the same."""
+    if isinstance(v, float):
+        return v == v and v not in (float("inf"), float("-inf"))
+    if isinstance(v, dict):
+        return all(finite(x) for x in v.values())
+    if isinstance(v, list):
+        return all(finite(x) for x in v)
+    return True
 
 
 def scalar(v):
@@ -241,6 +258,8 @@ def read_bounds(stage):
         body = strict_json(raw)
     except ValueError as exc:
         return "not_checked", [f"the bounds cannot be read: {exc}"], None
+    if not finite(body):
+        return "not_checked", ["the bounds cannot be read: a number that is not finite"], None
     problems = bounds_problems(body)
     if problems:
         return "failed", ["the bounds are not well formed: " + "; ".join(problems)], None
@@ -485,9 +504,11 @@ def check_attachment(att, record_raw=None):
         if target is None:
             continue
         entry = standing[target["stage_id"]]
-        mark = (pos[s["stage_id"]], when(s["at"]), s["stage_id"])
-        if entry["revoked"] is None or mark < entry["revoked"]:
-            entry["revoked"] = mark
+        # Every recorded revocation counts: the earliest listed and the earliest dated are kept, each on its own,
+        # so that a request listed or dated after any one of them is caught; the first listed gives the name.
+        prev = entry["revoked"]
+        entry["revoked"] = ((pos[s["stage_id"]], when(s["at"]), s["stage_id"]) if prev is None else
+                            (min(prev[0], pos[s["stage_id"]]), min(prev[1], when(s["at"])), prev[2]))
 
     def use(s, auth_id):
         limit = bound[auth_id][1]

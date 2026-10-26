@@ -339,9 +339,9 @@
           "then": {"properties": {"action_binding": {"properties": {"status": {"const": "failed"}}}}}
         },
         {
-          "description": "Bounds that are not verified leave the requests resting on them unchecked: the binding is not verified.",
+          "description": "Bounds that are not verified leave the requests resting on them unchecked: with a request recorded on them, the binding is not verified. An approval no request rests on constrains nothing (item 13 is about the requests).",
           "if": {
-            "properties": {"standing_approvals": {"contains": {"properties": {"bounds": {"properties": {"status": {"not": {"const": "verified"}}}, "required": ["status"]}}, "required": ["bounds"]}}},
+            "properties": {"standing_approvals": {"contains": {"properties": {"bounds": {"properties": {"status": {"not": {"const": "verified"}}}, "required": ["status"]}, "requests_recorded": {"minimum": 1}}, "required": ["bounds", "requests_recorded"]}}},
             "required": ["standing_approvals"]
           },
           "then": {"properties": {"action_binding": {"properties": {"status": {"enum": ["not_checked", "failed"]}}}}}
