@@ -119,7 +119,9 @@ def iso(t):
 
 
 def strict_json(raw):
-    """UTF-8 JSON with duplicate keys and non-finite numbers rejected."""
+    """UTF-8 JSON with duplicate keys rejected, and the JSON constants NaN and Infinity, which are not JSON. A number
+    JSON allows to be written but no double holds, 1e400, is read as the json module reads it, as infinity; a profile
+    that must compare such a value refuses it where it reads (action binding does, for the bounds)."""
     def pairs(items):
         out = {}
         for k, v in items:
