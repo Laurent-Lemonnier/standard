@@ -65,7 +65,7 @@ ANCHORING_VECTORS = ROOT / "extensions" / "anchoring" / "tests" / "vectors.json"
 PROFILE, VERSION = "dps-signatures", "0.2.0"
 MAGIC = b"DPS-SIG\x00"
 P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
-PERSON_TYPES = ("person_approval", "person_review", "person_affirmation")
+PERSON_TYPES = ("person_approval", "person_review", "person_standing_approval", "person_affirmation")
 PERSON_SUITES, SEAL_SUITES = ("Ed25519", "WebAuthn-ES256"), ("Ed25519",)
 TS_CHECKS = ("token", "message_imprint", "subject_bytes", "message_digest", "tsa_signature", "signer_certificate",
              "tsa_state")
@@ -188,11 +188,13 @@ def digest(value):
 def person_signed_bytes(ps, profile=PROFILE, version=VERSION, assertion=None, key_ref=None):
     """The person's assertions, each with one fixed field order (README, "Signed bytes"). The verifier takes the
     profile, the version and the assertion type from what it checks, never from bytes supplied with the signature."""
-    kind = assertion or ps["assertion"]
-    fields = [text(profile), text(version), text(kind), text(key_ref or ps["signature"]["key_ref"]),
+    kind = ps["assertion"]  # the object's own type gives the fields; assertion, when given, only relabels field 3
+    fields = [text(profile), text(version), text(assertion or kind), text(key_ref or ps["signature"]["key_ref"]),
               text(ps["decision_id"])]
     if kind == "person_affirmation":
         fields.append(digest(ps["affirmed_digest"]))
+    elif kind == "person_standing_approval":
+        fields += [text(ps["stage_id"]), digest(ps["bounds_digest"]), digest(ps.get("shown_view_digest"))]
     else:
         fields += [text(ps["stage_id"]), text(ps["outcome"]), digest(ps["shown_spec_digest"]),
                    digest(ps.get("shown_view_digest"))]
@@ -596,6 +598,30 @@ def check_person_subject(ps, ctx):
         by_id.setdefault(s["stage_id"], s)
     stage = by_id.get(ps["stage_id"])
     bad = []
+    if kind == "person_standing_approval":
+        # The standing_approval stage carries the bounds' digest, and the review it answers was shown it: the signed
+        # digest is both. The count and the period are inside the bounds, under that digest.
+        if stage is None or stage["kind"] != "standing_approval":
+            bad.append(f"{ps['stage_id']} is not a standing_approval stage of the attachment of {ps['decision_id']}")
+            out.update(status="failed", findings=bad)
+            return out, None, None
+        if stage["bounds_digest"] != ps["bounds_digest"]:
+            bad.append("the bounds digest differs from the stage's")
+        review = by_id.get(stage["review_ref"])
+        if review is None or review["kind"] != "review":
+            bad.append(f"{ps['stage_id']} answers no review stage")
+        else:
+            if review.get("shown_bounds_digest") != ps["bounds_digest"]:
+                bad.append("the bounds digest differs from the one the review was shown")
+            signed_view, stated_view = ps.get("shown_view_digest"), review.get("shown_view_digest")
+            if signed_view != stated_view:
+                bad.append("signed with no view digest; the review states one" if signed_view is None else
+                           "signed with a view digest; the review states none" if stated_view is None else
+                           "the shown view digest differs from the review's")
+        out.update(status="failed" if bad else "verified")
+        if bad:
+            out["findings"] = bad
+        return out, stage.get("actor_ref"), None
     if stage is None or stage["kind"] != "outcome":
         bad.append(f"{ps['stage_id']} is not an outcome stage of the attachment of {ps['decision_id']}")
         out.update(status="failed", findings=bad)

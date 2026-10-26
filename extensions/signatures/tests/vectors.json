@@ -316,6 +316,10 @@
     "text": "{\"shown_to\":\"owner-example-1\",\"text\":\"Release 1200.00 EUR to vendor 7 (account vendor-7-main), invoice 114 version 2, under payment policy 4.\",\"spec_digest\":\"e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9\"}",
     "digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193"
   },
+  "bounds": {
+    "text": "{\"operation\":\"payment.release\",\"target\":\"urn:example:vendor:7\",\"policy_version\":\"urn:example:payment-policy:4\",\"input_version_refs\":[\"urn:example:invoice:114#v2\"],\"parameters\":{\"amount\":{\"exact\":\"1200.00\"},\"currency\":{\"one_of\":[\"EUR\"]},\"destination\":{\"exact\":\"urn:example:account:vendor-7-main\"}},\"max_requests\":3,\"valid_from\":\"2026-10-03T00:00:00Z\",\"valid_until\":\"2026-12-31T23:59:59Z\"}",
+    "digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5"
+  },
   "action_binding_attachments": {
     "DR-2099-101": {
       "profile": "dps-action-binding",
@@ -456,6 +460,65 @@
           "core_ref": {
             "field": "review_log",
             "index": 0
+          }
+        }
+      ]
+    },
+    "DR-2099-103": {
+      "profile": "dps-action-binding",
+      "profile_version": "0.3.0",
+      "decision_id": "DR-2099-103",
+      "action_specifications": [
+        {
+          "spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+          "representation": {
+            "kind": "original_bytes",
+            "media_type": "application/json"
+          },
+          "content": {
+            "availability": "available",
+            "bytes_b64": "eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBhcmFtZXRlcnMiOnsiYW1vdW50IjoiMTIwMC4wMCIsImN1cnJlbmN5IjoiRVVSIiwiZGVzdGluYXRpb24iOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifSwiaW5wdXRfdmVyc2lvbl9yZWZzIjpbInVybjpleGFtcGxlOmludm9pY2U6MTE0I3YyIl0sInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCJ9"
+          },
+          "summary": {
+            "operation": "payment.release",
+            "target": "urn:example:vendor:7",
+            "policy_version": "urn:example:payment-policy:4",
+            "input_version_refs": [
+              "urn:example:invoice:114#v2"
+            ]
+          }
+        }
+      ],
+      "stages": [
+        {
+          "stage_id": "v1",
+          "kind": "review",
+          "at": "2026-10-03T09:10:00Z",
+          "reviewer_ref": "owner-example-1",
+          "shown_bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+          "shown_view_ref": "urn:example:review-view:103-1",
+          "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193"
+        },
+        {
+          "stage_id": "sa1",
+          "kind": "standing_approval",
+          "at": "2026-10-03T09:12:00Z",
+          "review_ref": "v1",
+          "actor_ref": "owner-example-1",
+          "method": "signature",
+          "authority": {
+            "authority_ref": "urn:example:charter:CH-EXAMPLE-1#payables-delegation"
+          },
+          "rationale": {
+            "timing": "contemporaneous",
+            "ai_assisted": false,
+            "recorded_at": "2026-10-03T09:12:00Z",
+            "text_ref": "urn:example:rationale:103-1"
+          },
+          "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+          "bounds": {
+            "availability": "available",
+            "bytes_b64": "eyJvcGVyYXRpb24iOiJwYXltZW50LnJlbGVhc2UiLCJ0YXJnZXQiOiJ1cm46ZXhhbXBsZTp2ZW5kb3I6NyIsInBvbGljeV92ZXJzaW9uIjoidXJuOmV4YW1wbGU6cGF5bWVudC1wb2xpY3k6NCIsImlucHV0X3ZlcnNpb25fcmVmcyI6WyJ1cm46ZXhhbXBsZTppbnZvaWNlOjExNCN2MiJdLCJwYXJhbWV0ZXJzIjp7ImFtb3VudCI6eyJleGFjdCI6IjEyMDAuMDAifSwiY3VycmVuY3kiOnsib25lX29mIjpbIkVVUiJdfSwiZGVzdGluYXRpb24iOnsiZXhhY3QiOiJ1cm46ZXhhbXBsZTphY2NvdW50OnZlbmRvci03LW1haW4ifX0sIm1heF9yZXF1ZXN0cyI6MywidmFsaWRfZnJvbSI6IjIwMjYtMTAtMDNUMDA6MDA6MDBaIiwidmFsaWRfdW50aWwiOiIyMDI2LTEyLTMxVDIzOjU5OjU5WiJ9"
           }
         }
       ]
@@ -612,11 +675,11 @@
         "signature": {
           "algorithm": "Ed25519",
           "key_ref": "person-a-1",
-          "value_b64": "Lv8yoyJxqmg1OhqZphvYxRW/lz/9lj78Nk3lCmOvNGQME99Oo+0RNq7m0d2AScFc7S5QdVIfachpl0i5yBrtDg=="
+          "value_b64": "T4kDsu+z4i1dx4tMtAGNzIAEBFDNMRJl+K0WwTZ9SbMSCuVuvUEcFHS54YDuzhtNdsU/HfbW419zcsndMIWBBw=="
         }
       },
       "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e300000000f706572736f6e5f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e900000014323032362d31302d30315430393a31323a30305a",
-      "signature_made_over_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a706572736f6e2d612d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30315430393a31323a30305a"
+      "signature_made_over_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e30000000116f7267616e69736174696f6e5f7365616c0000000a706572736f6e2d612d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e900000014323032362d31302d30315430393a31323a30305a"
     },
     "approval_a_view_dropped": {
       "about": "signed with no view digest (the empty field), presented with the review's view digest",
@@ -1197,6 +1260,243 @@
         }
       },
       "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000012706572736f6e5f61666669726d6174696f6e0000000a706572736f6e2d612d310000000b44522d323039392d30303300000020b1e64122262fa27b7f655cdc66bcf24865f40baf1080e50e7e308874ae4fe73f00000014323032362d30392d32375431303a30303a30305a"
+    },
+    "standing_a": {
+      "about": "person-a-1 approves the bounds of DR-2099-103 once (stage sa1), shown their digest and a view",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "S2PXrmZ8/LmLbRTbMUOmY6BQrMdMGODRx9d7XmivAuaGlBGcMUZbM9+CocXGJTvmLspdsQvTBoLT9kh8vNvdBw=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a"
+    },
+    "standing_a_bounds_changed": {
+      "about": "standing_a signed over the bounds' digest, presented with the specification's digest in its place",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "bounds_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "S2PXrmZ8/LmLbRTbMUOmY6BQrMdMGODRx9d7XmivAuaGlBGcMUZbM9+CocXGJTvmLspdsQvTBoLT9kh8vNvdBw=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a",
+      "signature_made_over_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a"
+    },
+    "standing_a_view_dropped": {
+      "about": "signed with no view digest (the empty field), presented with the review's view digest",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "9wo0rzojxX/AARAYEyyF5Q6FEkJpJAkHXnU3lpRYi73E/H9n+BgvhAKqRY98mfudynMvOARwJkubPrO4/HO/BA=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a",
+      "signature_made_over_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba50000000000000014323032362d31302d30335430393a31323a30305a"
+    },
+    "standing_a_no_view": {
+      "about": "signed and presented with no view digest, while the review states one",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "9wo0rzojxX/AARAYEyyF5Q6FEkJpJAkHXnU3lpRYi73E/H9n+BgvhAKqRY98mfudynMvOARwJkubPrO4/HO/BA=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba50000000000000014323032362d31302d30335430393a31323a30305a"
+    },
+    "standing_a_wrong_stage": {
+      "about": "names the review stage v1, not the standing approval",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "v1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "WY9z1A14pPPuT1bY67yrqGE4ms9Vl55SYGbpxPIQiGSpKKWVvkSfYdKl4Cz2CT6EsyfDcBZXYpQ/rbpgWvOzCQ=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d31303300000002763100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a"
+    },
+    "standing_a_other_decision": {
+      "about": "names DR-2099-101, whose stage sa1 does not exist",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-101",
+        "stage_id": "sa1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "bFUvO19PybYMnxxF8ADFypmPJY/J6sJ0+LcwTIlEscZIXqyzJmdpW4wlBZ4UOCcLs5aWb6+/74h1S9PFu3rOAw=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130310000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a"
+    },
+    "standing_a_time_changed": {
+      "about": "signed at 09:12:00Z, presented a minute later",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:13:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "S2PXrmZ8/LmLbRTbMUOmY6BQrMdMGODRx9d7XmivAuaGlBGcMUZbM9+CocXGJTvmLspdsQvTBoLT9kh8vNvdBw=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31333a30305a",
+      "signature_made_over_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a"
+    },
+    "standing_a_by_org": {
+      "about": "org-seal-1, a key in role organisation, signs a person's standing approval",
+      "signed_with": "org-seal-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "org-seal-1",
+          "value_b64": "87NtPrN0k83o+6X4VTFdsD8oNN613VZ7xuACg9DnE//8qcovWaQ6KSPNGWvxA8QXyVHqECVqVp+LM2egSPe8BA=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a6f72672d7365616c2d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a"
+    },
+    "standing_a_as_approval": {
+      "about": "standing_a's signature presented in a person_approval object over DR-2099-101's outcome o1: the type is in the signed bytes",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_approval",
+        "decision_id": "DR-2099-101",
+        "stage_id": "o1",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "S2PXrmZ8/LmLbRTbMUOmY6BQrMdMGODRx9d7XmivAuaGlBGcMUZbM9+CocXGJTvmLspdsQvTBoLT9kh8vNvdBw=="
+        },
+        "outcome": "approved",
+        "shown_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9",
+        "approved_spec_digest": "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9"
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e300000000f706572736f6e5f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e900000014323032362d31302d30335430393a31323a30305a",
+      "signature_made_over_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a"
+    },
+    "approval_a_as_standing": {
+      "about": "approval_a's signature presented in a person_standing_approval object over DR-2099-103's stage sa1: the type is in the signed bytes",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-01T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "vnKA9wKOh7Ot+n2dw6HTqNyxNTXvpp89raUf0uYYybeHZXk32f5bwZ4voPdxOfR1mT6uOdZ3RGGcmW5AbfdCAw=="
+        },
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5"
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30315430393a31323a30305a",
+      "signature_made_over_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e300000000f706572736f6e5f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d313031000000026f3100000008617070726f76656400000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000020e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e900000014323032362d31302d30315430393a31323a30305a"
+    },
+    "standing_passkey": {
+      "about": "person-a-passkey-1 approves the bounds of DR-2099-103 with a passkey, user present and verified",
+      "signed_with": "person-a-passkey-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:30Z",
+        "signature": {
+          "algorithm": "WebAuthn-ES256",
+          "key_ref": "person-a-passkey-1",
+          "value_b64": "MEYCIQDzVA+POM32wpFlvGurVDdPjR3QsktJAZ795W+3nM31XAIhAKEHPwr5pmUUa4gMZevdWsaWozfEiPiv2AZCOZuGSzsM",
+          "authenticator_data_b64": "v6vDdDKViwYzYNOtZGHJxHNa5/jt1GWSpeDwFFKy5LUFAAAABw==",
+          "client_data_json_b64": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicGZJV0FBREFsRVpPSEVnOS1rYklvR1JGamoxRUxkZGdVZVV0MHlOMlpEWSIsIm9yaWdpbiI6Imh0dHBzOi8vZXhhbXBsZS5vcmciLCJjcm9zc09yaWdpbiI6ZmFsc2V9"
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c00000012706572736f6e2d612d706173736b65792d310000000b44522d323039392d3130330000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a33305a",
+      "webauthn": {
+        "challenge_b64url": "pfIWAADAlEZOHEg9-kbIoGRFjj1ELddgUeUt0yN2ZDY",
+        "rp_id": "example.org",
+        "origin": "https://example.org",
+        "type": "webauthn.get",
+        "cross_origin": false,
+        "flags_hex": "05",
+        "authenticator_signed_hex": "bfabc37432958b063360d3ad6461c9c4735ae7f8edd46592a5e0f01452b2e4b50500000007e3b3f7b93fc6a7e2815b7572b58955876da4dd0e7d64039012126af54d4f2f3e"
+      }
     },
     "approval_passkey": {
       "about": "person-a-passkey-1 (WebAuthn, ES256) approves o1, user present and verified",
@@ -2801,6 +3101,21 @@
           "key_ref": "person-a-2",
           "value_b64": "hPePAvabGoSXjf0SaEj5UoLmWeLVDCoLMjhitJFfD2XjArOpsLgpM7Gqa9a05nOIbXgB0N+XMoHMQQVnKx6PAA=="
         }
+      },
+      {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "S2PXrmZ8/LmLbRTbMUOmY6BQrMdMGODRx9d7XmivAuaGlBGcMUZbM9+CocXGJTvmLspdsQvTBoLT9kh8vNvdBw=="
+        }
       }
     ],
     "organisation_seals": [
@@ -3055,7 +3370,8 @@
     "export": "full",
     "action_binding": [
       "DR-2099-101",
-      "DR-2099-102"
+      "DR-2099-102",
+      "DR-2099-103"
     ]
   },
   "base_report": {
@@ -3065,7 +3381,7 @@
     "trust_policy": {
       "status": "verified"
     },
-    "attachment_digest": "9fcedb64bdcde7fec267b8b17fee14f4cb0ae793b1029dacd9e8239f4c6af43b",
+    "attachment_digest": "4a7fc4b3ebf03efebff35064348dccafff06751383f7a821c335eb6655ba527b",
     "documents": [
       {
         "kind": "export",
@@ -3080,9 +3396,14 @@
         "kind": "action_binding_attachment",
         "decision_id": "DR-2099-102",
         "digest": "1e1b62bdbdd10e403bb1c7d5e0d0927cec9a2b0cd3ac8b43e1199cde72d5817c"
+      },
+      {
+        "kind": "action_binding_attachment",
+        "decision_id": "DR-2099-103",
+        "digest": "a903ba52bc980649f55f1c50d571ed3ed6b28588e8c8f5159307430ef9e109be"
       }
     ],
-    "person_signature_count": 5,
+    "person_signature_count": 6,
     "person_signatures": [
       {
         "signature_index": 0,
@@ -3242,6 +3563,38 @@
           "time_basis": "independent_timestamp",
           "time": "2026-10-01T09:15:00Z",
           "timestamp_index": 0
+        },
+        "identity": {
+          "status": "verified",
+          "basis": "trust_policy",
+          "source_ref": "urn:example:directory:issuer-1",
+          "holder": "owner-example-1",
+          "issuer_named": "owner-example-1",
+          "consistency": "consistent"
+        }
+      },
+      {
+        "signature_index": 5,
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "sa1",
+        "key_ref": "person-a-1",
+        "status": "verified",
+        "signature": {
+          "status": "verified",
+          "key_ref": "person-a-1",
+          "algorithm": "Ed25519",
+          "reference_source": "trust_policy"
+        },
+        "subject": {
+          "status": "verified",
+          "checked_against": "action_binding_attachment"
+        },
+        "key_state": {
+          "status": "verified",
+          "key_ref": "person-a-1",
+          "time_basis": "stated_time",
+          "time": "2026-10-03T09:12:00Z"
         },
         "identity": {
           "status": "verified",
