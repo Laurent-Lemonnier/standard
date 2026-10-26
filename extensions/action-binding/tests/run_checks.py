@@ -200,6 +200,29 @@ def instant_with_offset(text):
     return t if t.tzinfo is not None else None
 
 
+def dated_after(a, b, bad, where):
+    """Whether the issuer's time a is later than b. None, with a finding in bad, when either names no instant: the
+    schema's pattern accepts a date that does not exist, such as 2026-02-30, and a leap second (23:59:60), and
+    neither is a time. The order is then not shown, and the check does not stop."""
+    x, y = instant_with_offset(a), instant_with_offset(b)
+    if x is None or y is None:
+        finding = (f"{where}: {a if x is None else b} cannot be read as a UTC time (a date that does not exist, or a "
+                   "leap second), so the order of the issuer's times cannot be checked")
+        if finding not in bad:
+            bad.append(finding)
+        return None
+    return x > y
+
+
+def earlier_time(a, b):
+    """The earlier of two of the issuer's times, as written; one that names no instant is kept, so that a comparison
+    with it reports it."""
+    x, y = instant_with_offset(a), instant_with_offset(b)
+    if x is None or y is None:
+        return a if x is None else b
+    return a if x <= y else b
+
+
 def bounds_problems(b):
     """Why a value is not well-formed bounds: exactly the members the text names, each of its form, every
     constraint one of the four kinds. An empty list means well formed."""
@@ -507,8 +530,8 @@ def check_attachment(att, record_raw=None):
         # Every recorded revocation counts: the earliest listed and the earliest dated are kept, each on its own,
         # so that a request listed or dated after any one of them is caught; the first listed gives the name.
         prev = entry["revoked"]
-        entry["revoked"] = ((pos[s["stage_id"]], when(s["at"]), s["stage_id"]) if prev is None else
-                            (min(prev[0], pos[s["stage_id"]]), min(prev[1], when(s["at"])), prev[2]))
+        entry["revoked"] = ((pos[s["stage_id"]], s["at"], s["stage_id"]) if prev is None else
+                            (min(prev[0], pos[s["stage_id"]]), earlier_time(prev[1], s["at"]), prev[2]))
 
     def use(s, auth_id):
         limit = bound[auth_id][1]
@@ -552,7 +575,8 @@ def check_attachment(att, record_raw=None):
             entry = standing[auth["stage_id"]]
             entry["requests"].append(s["stage_id"])
             under_standing.add(s["spec_digest"])
-            if entry["revoked"] and (pos[s["stage_id"]] > entry["revoked"][0] or when(s["at"]) > entry["revoked"][1]):
+            if entry["revoked"] and (dated_after(s["at"], entry["revoked"][1], bad, s["stage_id"])
+                                     or pos[s["stage_id"]] > entry["revoked"][0]):
                 bad.append(f"{s['stage_id']}: rests on {auth['stage_id']} after {entry['revoked'][2]} revoked it")
             if s["spec_digest"] in refused:
                 bad.append(f"{s['stage_id']}: reaches a specification that {refused[s['spec_digest']][0]} "
@@ -565,7 +589,8 @@ def check_attachment(att, record_raw=None):
                                  + "; ".join(entry["findings"]))
                 continue
             b = entry["body"]
-            if not when(b["valid_from"]) <= when(s["at"]) <= when(b["valid_until"]):
+            if (dated_after(b["valid_from"], s["at"], bad, s["stage_id"])
+                    or dated_after(s["at"], b["valid_until"], bad, s["stage_id"])):
                 bad.append(f"{s['stage_id']}: dated outside the period of {auth['stage_id']} "
                            f"({b['valid_from']} to {b['valid_until']})")
             if len(entry["requests"]) > b["max_requests"]:
@@ -629,7 +654,7 @@ def check_attachment(att, record_raw=None):
                 continue
             if pos[target["stage_id"]] > pos.get(s["stage_id"], -1):
                 bad.append(f"{s['stage_id']} is listed before {target['stage_id']}, which it names")
-            elif when(target["at"]) > when(s["at"]):
+            elif dated_after(target["at"], s["at"], bad, s["stage_id"]):
                 bad.append(f"{s['stage_id']} is dated before {target['stage_id']}, which it names")
     out["stage_order"] = ("failed", bad) if bad else ("verified", [])
 
@@ -640,7 +665,7 @@ def check_attachment(att, record_raw=None):
         if rc is None or rc["kind"] != "recheck" or rc["request_ref"] != s["request_ref"]:
             bad.append(f"{s['stage_id']}: no recheck of its request is recorded")
             continue
-        if pos[rc["stage_id"]] > pos[s["stage_id"]] or when(rc["at"]) > when(s["at"]):
+        if dated_after(rc["at"], s["at"], bad, s["stage_id"]) or pos[rc["stage_id"]] > pos[s["stage_id"]]:
             bad.append(f"{s['stage_id']}: the recheck comes after the attempt")
         if rc["result"] != "authorised":
             bad.append(f"{s['stage_id']}: attempted after a recheck that found {rc['result']}")
@@ -649,7 +674,8 @@ def check_attachment(att, record_raw=None):
         request = by_id.get(s["request_ref"])
         entry = standing.get(request["authorised_by"]) if request and request["kind"] == "request" else None
         if (entry and entry["revoked"] and rc["result"] == "authorised"
-                and (pos[rc["stage_id"]] > entry["revoked"][0] or when(rc["at"]) > entry["revoked"][1])):
+                and (dated_after(rc["at"], entry["revoked"][1], bad, s["stage_id"])
+                     or pos[rc["stage_id"]] > entry["revoked"][0])):
             bad.append(f"{s['stage_id']}: the recheck authorised a request under {request['authorised_by']} after "
                        f"{entry['revoked'][2]} revoked it")
         later = [r for r in kinds["recheck"] if r["request_ref"] == s["request_ref"]
@@ -694,9 +720,9 @@ def check_attachment(att, record_raw=None):
     bad = []
     for s in kinds["outcome"] + kinds["change_authorisation"] + kinds["standing_approval"] + kinds["standing_revocation"]:
         r = s["rationale"]
-        if r["timing"] == "contemporaneous" and when(r["recorded_at"]) > when(s["at"]):
+        if r["timing"] == "contemporaneous" and dated_after(r["recorded_at"], s["at"], bad, s["stage_id"]):
             bad.append(f"{s['stage_id']}: recorded after the outcome, presented as contemporaneous")
-        if r["timing"] == "later_supplemented" and when(r["recorded_at"]) <= when(s["at"]):
+        if r["timing"] == "later_supplemented" and dated_after(r["recorded_at"], s["at"], bad, s["stage_id"]) is False:
             bad.append(f"{s['stage_id']}: said to be supplemented later, but dated with the outcome")
     out["rationale_provenance"] = ("failed", bad) if bad else ("verified", [])
     out["per_spec"] = per_spec
