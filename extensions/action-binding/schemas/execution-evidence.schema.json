@@ -17,12 +17,15 @@
       "items": {"$ref": "#/$defs/action_specification"}
     },
     "stages": {
-      "description": "The stages in the order the issuer recorded them. Every attachment has at least one review and one outcome.",
+      "description": "The stages in the order the issuer recorded them. Every attachment has at least one review, and at least one outcome or one standing approval.",
       "type": "array",
       "items": {"$ref": "#/$defs/stage"},
       "allOf": [
         {"contains": {"properties": {"kind": {"const": "review"}}, "required": ["kind"]}},
-        {"contains": {"properties": {"kind": {"const": "outcome"}}, "required": ["kind"]}}
+        {"anyOf": [
+          {"contains": {"properties": {"kind": {"const": "outcome"}}, "required": ["kind"]}},
+          {"contains": {"properties": {"kind": {"const": "standing_approval"}}, "required": ["kind"]}}
+        ]}
       ]
     },
     "issuer_signature": {
@@ -168,6 +171,8 @@
         {"$ref": "#/$defs/proposal"},
         {"$ref": "#/$defs/review"},
         {"$ref": "#/$defs/outcome"},
+        {"$ref": "#/$defs/standing_approval"},
+        {"$ref": "#/$defs/standing_revocation"},
         {"$ref": "#/$defs/change_authorisation"},
         {"$ref": "#/$defs/request"},
         {"$ref": "#/$defs/recheck"},
@@ -199,16 +204,18 @@
       }
     },
     "review": {
-      "description": "A person shown a specification. shown_spec_digest names exactly what was shown.",
+      "description": "A person shown a specification, or shown the bounds of a standing approval. Exactly one of shown_spec_digest and shown_bounds_digest names what was shown.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["stage_id", "kind", "at", "reviewer_ref", "shown_spec_digest"],
+      "required": ["stage_id", "kind", "at", "reviewer_ref"],
+      "oneOf": [{"required": ["shown_spec_digest"]}, {"required": ["shown_bounds_digest"]}],
       "properties": {
         "stage_id": {"$ref": "#/$defs/stage_id"},
         "kind": {"const": "review"},
         "at": {"$ref": "#/$defs/timestamp"},
         "reviewer_ref": {"$ref": "#/$defs/ref"},
         "shown_spec_digest": {"$ref": "#/$defs/sha256_hex"},
+        "shown_bounds_digest": {"$ref": "#/$defs/sha256_hex", "description": "The digest of the bounds shown, when the review is of a standing approval's bounds. A standing approval answers such a review; an outcome other than approved may answer it too."},
         "proposal_ref": {"$ref": "#/$defs/stage_id", "description": "The proposal this review answers, where there is one. The check then reports whether the reviewer was shown what was proposed."},
         "edited_by": {"$ref": "#/$defs/ref", "description": "Who edited the proposal into the specification shown, when the two differ. That person is the author of the change, and a verification report shows them."},
         "shown_view_ref": {"$ref": "#/$defs/ref", "description": "Where the view the reviewer was shown is kept."},
@@ -241,8 +248,45 @@
       "then": {"required": ["approved_spec_digest", "authority"], "not": {"required": ["escalated_to_ref"]}},
       "else": {"not": {"anyOf": [{"required": ["approved_spec_digest"]}, {"required": ["authority"]}, {"required": ["request_limit"]}]}}
     },
+    "standing_approval": {
+      "description": "A named person's approval, once, of bounds within which requests may be made without a review of each: the operation, the target, the policy version, the input-version references allowed, a constraint for every parameter, how many requests at most, and a period. The bounds travel as exact bytes under bounds_digest, the digest the review it answers was shown. The stage records the approval of the bounds only: no one is shown to have looked at any request made under it, and it approves nothing in any legal sense. A request may rest on it (authorised_by); a change never starts from it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_id", "kind", "at", "review_ref", "actor_ref", "method", "authority", "rationale", "bounds_digest", "bounds"],
+      "properties": {
+        "stage_id": {"$ref": "#/$defs/stage_id"},
+        "kind": {"const": "standing_approval"},
+        "at": {"$ref": "#/$defs/timestamp"},
+        "review_ref": {"$ref": "#/$defs/stage_id", "description": "The review that was shown the bounds' digest."},
+        "actor_ref": {"$ref": "#/$defs/ref", "description": "The named person who approved the bounds: the issuer's statement, not verified identity. Never the proposer or a service named in the attachment."},
+        "method": {"$ref": "#/$defs/ref", "description": "How that person gave the approval. Never a default, a timeout or the absence of an objection."},
+        "authority": {"$ref": "#/$defs/authority"},
+        "rationale": {"$ref": "#/$defs/rationale"},
+        "bounds_digest": {"$ref": "#/$defs/sha256_hex", "description": "SHA-256 of the exact bytes of the bounds, in lowercase hex."},
+        "bounds": {"$ref": "#/$defs/content", "description": "The bounds' exact bytes: a JSON object with exactly the members operation, target, policy_version, input_version_refs, parameters, max_requests, valid_from and valid_until, as the extension's text defines them. Unavailable or unreadable bytes mean that no request is checked against them."},
+        "identity_evidence_ref": {"$ref": "#/$defs/ref"},
+        "legal_signature_ref": {"$ref": "#/$defs/ref"},
+        "core_ref": {"$ref": "#/$defs/core_ref"}
+      }
+    },
+    "standing_revocation": {
+      "description": "The issuer's record that a standing approval was revoked: a request that rests on it after this stage is not authorised. Its absence shows nothing, and the executor's recheck, not this record, gives the live state.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_id", "kind", "at", "revokes_ref", "actor_ref", "method", "rationale"],
+      "properties": {
+        "stage_id": {"$ref": "#/$defs/stage_id"},
+        "kind": {"const": "standing_revocation"},
+        "at": {"$ref": "#/$defs/timestamp"},
+        "revokes_ref": {"$ref": "#/$defs/stage_id", "description": "The standing approval revoked."},
+        "actor_ref": {"$ref": "#/$defs/ref"},
+        "method": {"$ref": "#/$defs/ref"},
+        "authority": {"$ref": "#/$defs/authority"},
+        "rationale": {"$ref": "#/$defs/rationale"}
+      }
+    },
     "change_authorisation": {
-      "description": "A separately authorised change: it names the earlier approval or change, a different specification, and the named person who authorises it with their own authority. Never the proposer, a service named in the attachment, or a default. It uses up one request of the approval or change it names, and it cannot reach a specification that a reviewer in the attachment rejected or escalated. No reviewer is shown the new specification, and a verification report says so.",
+      "description": "A separately authorised change: it names the earlier approval or change, a different specification, and the named person who authorises it with their own authority. Never the proposer, a service named in the attachment, or a default. It uses up one request of the approval or change it names, and it cannot reach a specification that a reviewer in the attachment rejected or escalated. No reviewer is shown the new specification, and a verification report says so. It never starts from a standing approval.",
       "type": "object",
       "additionalProperties": false,
       "required": ["stage_id", "kind", "at", "from_ref", "spec_digest", "actor_ref", "method", "authority", "rationale"],
@@ -271,7 +315,7 @@
         "kind": {"const": "request"},
         "at": {"$ref": "#/$defs/timestamp"},
         "request_id": {"$ref": "#/$defs/ref"},
-        "authorised_by": {"$ref": "#/$defs/stage_id", "description": "The approval or authorised change this request rests on."},
+        "authorised_by": {"$ref": "#/$defs/stage_id", "description": "The approval, authorised change or standing approval this request rests on. Under a standing approval, the check compares the specification with the bounds; the executor's recheck is still required before an attempt."},
         "spec_digest": {"$ref": "#/$defs/sha256_hex"},
         "requested_by": {"$ref": "#/$defs/ref"}
       }

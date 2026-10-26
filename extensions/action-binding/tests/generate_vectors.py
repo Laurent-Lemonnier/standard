@@ -6,8 +6,9 @@ Everything in vectors.json is computed from published inputs, so that another im
   attachments       A0 (an approved and executed payment) and A1 (a rejected one), from the templates in cases.json,
                     A0 signed by org-seal-1: its issuer_signature is the copy of the signatures 0.2.0 organisation seal
                     of kind attachment, five members, sealed_at written in place; A0_older, the same record's earlier
-                    attachment with fewer stages, signed; and B0 and B1, the signatures vectors' attachments of
-                    DR-2099-101 and DR-2099-102 as they stand there, copied and checked
+                    attachment with fewer stages, signed; A2, a standing approval of bounds with two requests under
+                    it, unsigned; and B0 and B1, the signatures vectors' attachments of DR-2099-101 and DR-2099-102
+                    as they stand there, copied and checked
   issuer signatures the copy as the cases need it: made with another key, under another profile, version or kind,
                     over bytes replaced with another placeholder, stated at a time that is not real, changed after
                     signing, and so on
@@ -71,7 +72,12 @@ def strict_json(raw):
                 raise ValueError(f"duplicate key {k!r}")
             out[k] = v
         return out
-    return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs,
+    def finite(text):  # a number written as 1e400 reads as infinity: not read, as the signatures reader has it
+        value = float(text)
+        if value != value or value in (float("inf"), float("-inf")):
+            raise ValueError(f"not a finite number: {text}")
+        return value
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=pairs, parse_float=finite,
                       parse_constant=lambda n: (_ for _ in ()).throw(ValueError(n)))
 
 
@@ -152,6 +158,8 @@ def build():
     attachments["A0"], seal_a0 = sig("a0", "org-seal-1 seals A0, the attachment of DR-2099-101: the copy of the seal is "
                                      "its issuer_signature", a0_template, "org-seal-1", SEALED_AT["A0"])
     attachments["A1"] = copy.deepcopy(a1_template)
+    # A2: a standing approval of bounds, two requests made under it, each rechecked, attempted and observed; unsigned.
+    attachments["A2"] = copy.deepcopy(templates["A2"])
     attachments["A0_older"], seal_older = sig(
         "a0_older", "org-seal-1 seals the same record's earlier attachment, with the proposal, the review and the "
         "approval only: a valid signature, which says nothing about whether a later attachment exists",
