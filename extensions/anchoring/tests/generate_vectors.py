@@ -1242,6 +1242,15 @@ def build():
     items, _ = ots_path(d_r0, [("append", b"\x01" * 4065), ("sha256",)], bitcoin(800006))
     ots("seal_r0_result_over_limit", "R0's seal with an append whose result is 4,097 bytes: one over the limit", subj_r0,
         ots_proof(d_r0, ots_tree(items)))
+    # A prepend's argument counts toward the result as an append's does, and a sha256 sets the size back to 32 bytes.
+    items, _ = ots_path(d_r0, [("prepend", b"\x01" * 4065), ("sha256",)], bitcoin(800006))
+    ots("seal_r0_prepend_over_limit", "R0's seal with a prepend whose result is 4,097 bytes: one over the limit",
+        subj_r0, ots_proof(d_r0, ots_tree(items)))
+    items, root_two = ots_path(d_r0, [("append", b"\x01" * 4064), ("sha256",), ("append", b"\x02" * 4064), ("sha256",)],
+                               bitcoin(800007))
+    block(800007, root_two, "2026-09-27T19:00:00Z")
+    ots("seal_r0_two_appends_at_limit", "R0's seal with two appends of 4,064 bytes and a sha256 between them, each "
+        "result exactly 4,096 bytes: within the limit, to block 800007", subj_r0, ots_proof(d_r0, ots_tree(items)))
     ots("seal_r0_same_operation_twice", "R0's seal with sha256 written twice at one point", subj_r0,
         ots_proof(d_r0, ots_tree([("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800001))]),
                                   ("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800002))])])))
