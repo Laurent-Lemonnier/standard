@@ -667,6 +667,7 @@ def compare(export, cp):
 
 COSE_SIGN1_TAG = 18                                        # RFC 9052: a tagged COSE_Sign1
 ALG_ED25519 = -19                                          # RFC 9864: Ed25519; -8 (EdDSA) is deprecated there
+ALG_EDDSA_DEPRECATED = -8                                  # EdDSA; read in a receipt with a finding, never in a statement
 HDR_ALG, HDR_CRIT, HDR_KID, HDR_CWT_CLAIMS = 1, 2, 4, 15    # RFC 9052 header labels; 15 is RFC 9597's CWT claims
 CWT_ISS, CWT_SUB = 1, 2                                    # RFC 8392 claim keys
 HDR_VDS, HDR_VDP = 395, 396                                # RFC 9942: the verifiable data structure, and its proofs
@@ -977,8 +978,14 @@ def check_receipt(info, policy, allowed, where):
         return failed(f"the receipt cannot be read: {exc}")
     if payload is not None:
         return failed("the receipt carries a payload; a receipt's payload is detached, the root the verifier computes")
-    if pmap.get(HDR_ALG) != ALG_ED25519:
-        return {"status": "not_supported", "findings": [f"alg {pmap.get(HDR_ALG)!r}; this check takes -19 (Ed25519)"]}
+    # A receipt is the service's own, and a service is not bound by this extension: a receipt labelled -8 (EdDSA, which
+    # RFC 9864 deprecates in favour of -19) is verified exactly as one labelled -19, with a finding. The key comes from
+    # the policy, never from the receipt, so the verifier fixes the curve; the label is inside the signed bytes, so a
+    # signature made under one label does not verify under the other. A statement stays pinned to -19 (header_problems).
+    alg = pmap.get(HDR_ALG)
+    if alg not in (ALG_ED25519, ALG_EDDSA_DEPRECATED):
+        return {"status": "not_supported", "findings": [f"alg {alg!r}; this check takes -19 (Ed25519) or -8 (EdDSA)"]}
+    deprecated = ["alg -8 (EdDSA), deprecated by RFC 9864 in favour of -19 (Ed25519)"] if alg == ALG_EDDSA_DEPRECATED else []
     if pmap.get(HDR_VDS) != VDS_RFC9162_SHA256:
         return {"status": "not_supported", "findings": [f"verifiable data structure {pmap.get(HDR_VDS)!r}; this check "
                                                         "knows the RFC 9162 SHA-256 tree (1)"]}
@@ -992,6 +999,9 @@ def check_receipt(info, policy, allowed, where):
     if kid not in allowed:
         return failed(f"the trust policy does not list {kid} as a service key " +
                       ("for this source" if where == "configured_source" else "of a SCITT source for this chain"))
+    if key.get("algorithm") != "Ed25519":  # the policy may list a service key under another algorithm; this check
+        return {"status": "not_supported", "findings": [f"{kid} is listed as {key.get('algorithm')!r}; this check "
+                                                        "verifies a receipt with a service key listed as Ed25519"]}
     proofs = unprotected.get(HDR_VDP, {}).get(VDP_INCLUSION_PROOFS) if isinstance(unprotected.get(HDR_VDP), dict) \
         else None
     if not isinstance(proofs, list) or not proofs or not isinstance(proofs[0], bytes):
@@ -1019,10 +1029,11 @@ def check_receipt(info, policy, allowed, where):
                       "the proof is for another leaf, or the receipt is not the service's")
     out = {"service_key_ref": kid, "tree_size": size, "leaf_index": index}
     if key.get("revoked_at"):
-        out.update(status="unavailable", findings=[f"{kid} is revoked as {key.get('revocation_reason')}; a receipt "
-                                                   "states no time, so it cannot be shown made before that"])
+        out.update(status="unavailable", findings=deprecated + [f"{kid} is revoked as {key.get('revocation_reason')}; "
+                                                                "a receipt states no time, so it cannot be shown made "
+                                                                "before that"])
         return out
-    out.update(status="verified", findings=[f"{kid} signed that this statement is in its log at tree size {size} "
+    out.update(status="verified", findings=deprecated + [f"{kid} signed that this statement is in its log at tree size {size} "
                                             f"(leaf {index}); not that the log is append-only, nor that it showed "
                                             "everyone the same log; a receipt states no registration time, and the "
                                             "log's order need not be the order of issuance"])
@@ -2221,6 +2232,9 @@ def checkpoint_case(c, v, validators):
         for k in ("service_key_ref", "tree_size", "leaf_index"):
             if k in c["expected"]:
                 summary[k] = r["receipt"].get(k)
+        if "receipt_finding" in c["expected"]:  # a phrase the receipt's findings must hold
+            summary["receipt_finding"] = c["expected"]["receipt_finding"] if c["expected"]["receipt_finding"] in " ".join(
+                r["receipt"].get("findings", [])) else None
     detail = [f"{d}: {f}" for d in CHECKPOINT_DIMENSIONS[1:] for f in r[d].get("findings", [])] + r.get("findings", [])
     if "receipt" in r:
         detail += [f"receipt: {f}" for f in r["receipt"].get("findings", [])]
