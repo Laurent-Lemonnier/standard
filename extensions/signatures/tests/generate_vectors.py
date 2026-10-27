@@ -744,6 +744,8 @@ def build():
            dict(standing, stage_id="v1"))
     person("standing_a_other_decision", "names DR-2099-101, whose stage sa1 does not exist", "person-a-1",
            dict(standing, decision_id=DECISION_A))
+    person("standing_a_revocation_stage", "names rv1, a standing_revocation stage a case inserts, not the standing "
+           "approval", "person-a-1", dict(standing, stage_id="rv1"))
     person("standing_a_time_changed", "signed at 09:12:00Z, presented a minute later", "person-a-1", standing,
            presented={"signed_at": "2026-10-03T09:13:00Z"})
     person("standing_a_by_org", "org-seal-1, a key in role organisation, signs a person's standing approval",

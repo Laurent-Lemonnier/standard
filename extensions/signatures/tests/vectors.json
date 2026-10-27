@@ -1382,6 +1382,26 @@
       },
       "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130310000000373613100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a"
     },
+    "standing_a_revocation_stage": {
+      "about": "names rv1, a standing_revocation stage a case inserts, not the standing approval",
+      "signed_with": "person-a-1",
+      "assertion": {
+        "profile": "dps-signatures",
+        "profile_version": "0.2.0",
+        "assertion": "person_standing_approval",
+        "decision_id": "DR-2099-103",
+        "stage_id": "rv1",
+        "bounds_digest": "cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5",
+        "shown_view_digest": "2929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c193",
+        "signed_at": "2026-10-03T09:12:00Z",
+        "signature": {
+          "algorithm": "Ed25519",
+          "key_ref": "person-a-1",
+          "value_b64": "nKTZo0BPnJ5yOqEAw8h58yDLpd3D68sTEMqSfRwHAXt7dxEFt6WnemxfG4jTwYNPUUjkhREVGiR5MjSB3fjqBQ=="
+        }
+      },
+      "signed_bytes_hex": "4450532d534947000000000e6470732d7369676e61747572657300000005302e322e3000000018706572736f6e5f7374616e64696e675f617070726f76616c0000000a706572736f6e2d612d310000000b44522d323039392d3130330000000372763100000020cd40f5ca5629385ff6832a523af1169c7bcde14ea206def4d7d11e95defc8ba5000000202929b9a69a1beea71c92c669be23916b2b70f8462219e235916c2e4c3344c19300000014323032362d31302d30335430393a31323a30305a"
+    },
     "standing_a_time_changed": {
       "about": "signed at 09:12:00Z, presented a minute later",
       "signed_with": "person-a-1",
