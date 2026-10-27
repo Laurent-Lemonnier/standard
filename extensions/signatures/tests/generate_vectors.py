@@ -1012,6 +1012,10 @@ def build():
     tok("sig_approval_a", "TSA 1 over approval_a's signature value", sig_of(persons, "approval_a"), tsa1, at_915, 306)
     tok("sig_review_b0", "TSA 1 over review_b0's signature value", sig_of(persons, "review_b0"), tsa1,
         "2026-10-02T09:25:00Z", 307)
+    tok("sig_standing_a", "TSA 1 over standing_a's signature value, three minutes after the signer's stated time",
+        sig_of(persons, "standing_a"), tsa1, "2026-10-03T09:15:00Z", 321)
+    tok("sig_standing_a_after", "TSA 1 over standing_a's signature value, the next day, after a case reports person-a-1 "
+        "compromised", sig_of(persons, "standing_a"), tsa1, "2026-10-04T09:00:00Z", 322)
     tok("sig_seal_attachment", "TSA 1 over seal_attachment's signature value", sig_of(seals, "seal_attachment"), tsa1,
         "2026-10-01T09:35:00Z", 308)
     # The token's own shape, as anchoring 0.2.0's reference check reads it.
@@ -1143,6 +1147,8 @@ def build():
         "sig_approval_a2_tsa2": timestamp(subject_of(persons, "approval_a2"), "sig_approval_a2_tsa2", "tsa-example-2"),
         "sig_approval_a": timestamp(subject_of(persons, "approval_a"), "sig_approval_a"),
         "sig_review_b0": timestamp(subject_of(persons, "review_b0"), "sig_review_b0"),
+        "sig_standing_a": timestamp(subject_of(persons, "standing_a"), "sig_standing_a"),
+        "sig_standing_a_after": timestamp(subject_of(persons, "standing_a"), "sig_standing_a_after"),
         "sig_seal_attachment": timestamp(subject_of(seals, "seal_attachment"), "sig_seal_attachment"),
         # The subject's of may name this profile, as anchoring 0.2.0's attachment schema admits.
         "sig_approval_a2_named_profile": timestamp(
