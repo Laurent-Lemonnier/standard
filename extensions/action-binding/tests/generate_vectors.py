@@ -208,6 +208,14 @@ def build():
                                           "the copy stating 10:00: the signature stands, and the check notes the "
                                           "inconsistency between the issuer's own times", late_template, "org-seal-1",
                                           SEALED_AT["A0"])
+    # The same, its result stage dated 9999-12-31T23:00:00-05:00: a real instant the pattern accepts, whose UTC date
+    # falls after the year 9999, so a finding prints it as the attachment writes it.
+    far_template = copy.deepcopy(a0_template)
+    far_template["stages"][-1]["at"] = "9999-12-31T23:00:00-05:00"
+    attachments["A0_far_stage"], _ = sig("a0_far_stage", "org-seal-1 signs A0 with its result stage dated "
+                                         "9999-12-31T23:00:00-05:00, after the year 9999 in UTC, the copy stating "
+                                         "10:00: the signature stands, with the note", far_template, "org-seal-1",
+                                         SEALED_AT["A0"])
 
     # A copy whose sealed_at is not the seal's, with the same value: the issuer sealed A0's bytes with 10:05 written in
     # the copy, and signed the fields with 10:00. Only the issuer can write it. The copy fails here (the verifier
@@ -284,6 +292,9 @@ def build():
     ts("a0_late_stage", "TSA 1 over A0_late_stage's signature value at 10:15, while the attachment dates its result "
        "stage 10:30", sigs["a0_late_stage"]["issuer_signature"]["value_b64"], of_copy("a0_late_stage"), tsa1,
        "2026-10-01T10:15:00Z", 609)
+    ts("a0_far_stage", "TSA 1 over A0_far_stage's signature value at 10:15, while the attachment dates its result "
+       "stage after the year 9999 in UTC", sigs["a0_far_stage"]["issuer_signature"]["value_b64"],
+       of_copy("a0_far_stage"), tsa1, "2026-10-01T10:15:00Z", 611)
 
     beside = {
         "beside": {"profile": SIGNATURES_PROFILE, "profile_version": SIGNATURES_VERSION,
