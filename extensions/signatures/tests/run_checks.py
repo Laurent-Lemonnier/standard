@@ -611,7 +611,9 @@ def check_person_subject(ps, ctx):
         if review is None or review["kind"] != "review":
             bad.append(f"{ps['stage_id']} answers no review stage")
         else:
-            if review.get("shown_bounds_digest") != ps["bounds_digest"]:
+            if "shown_bounds_digest" not in review:
+                bad.append("the review was shown a specification, not the bounds")
+            elif review["shown_bounds_digest"] != ps["bounds_digest"]:
                 bad.append("the bounds digest differs from the one the review was shown")
             signed_view, stated_view = ps.get("shown_view_digest"), review.get("shown_view_digest")
             if signed_view != stated_view:
@@ -633,7 +635,12 @@ def check_person_subject(ps, ctx):
     if review is None or review["kind"] != "review":
         bad.append(f"{ps['stage_id']} answers no review stage")
     else:
-        if review["shown_spec_digest"] != ps["shown_spec_digest"]:
+        if "shown_spec_digest" not in review:
+            # Action binding 0.3.0 lets an outcome other than approved answer a review that was shown bounds; no person
+            # type of this version signs that act, so a signature over it fails its subject and says why.
+            bad.append("the review was shown the bounds' digest, not a specification; no person type of this version "
+                       "signs an outcome that answers a review of bounds")
+        elif review["shown_spec_digest"] != ps["shown_spec_digest"]:
             bad.append("the shown specification digest differs from the review's")
         signed_view, stated_view = ps.get("shown_view_digest"), review.get("shown_view_digest")
         if signed_view != stated_view:
