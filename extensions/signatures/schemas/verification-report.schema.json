@@ -98,7 +98,7 @@
       }
     },
     "subject_check": {
-      "description": "The signed fields against the document they name: the outcome stage and its review in the action-binding attachment, or the record's seal in the export; for a seal, the digest of the bytes as issued. checked_against names the document.",
+      "description": "The signed fields against the document they name: the outcome stage and its review, or the standing_approval stage and its review, in the action-binding attachment, or the record's seal in the export; for a seal, the digest of the bytes as issued. checked_against names the document.",
       "type": "object",
       "additionalProperties": false,
       "required": ["status"],
@@ -189,7 +189,7 @@
       "required": ["signature_index", "assertion", "decision_id", "key_ref", "status", "signature", "subject", "key_state", "identity"],
       "properties": {
         "signature_index": {"$ref": "#/$defs/index"},
-        "assertion": {"enum": ["person_approval", "person_review", "person_affirmation"]},
+        "assertion": {"enum": ["person_approval", "person_review", "person_standing_approval", "person_affirmation"]},
         "decision_id": {"type": "string", "minLength": 1},
         "stage_id": {"type": "string", "minLength": 1},
         "key_ref": {"$ref": "#/$defs/ref", "description": "The key reference the assertion states."},

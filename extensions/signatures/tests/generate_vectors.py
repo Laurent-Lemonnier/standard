@@ -93,7 +93,13 @@ SPECIFICATION = ('{"operation":"payment.release","target":"urn:example:vendor:7"
 ACTION_BINDING_SPEC_DIGEST = "e8c60bd5473dee8ab80760bdb81306dbf99332fa97c05f744bbaafe81ec787e9"  # S0 in its cases
 VIEW = ('{"shown_to":"owner-example-1","text":"Release 1200.00 EUR to vendor 7 (account vendor-7-main), invoice 114 '
         'version 2, under payment policy 4.","spec_digest":"' + ACTION_BINDING_SPEC_DIGEST + '"}')
-DECISION_A, DECISION_B = "DR-2099-101", "DR-2099-102"
+DECISION_A, DECISION_B, DECISION_C = "DR-2099-101", "DR-2099-102", "DR-2099-103"
+# The bounds of a standing approval over the same specification (action binding 0.3.0, "Standing approvals"): every
+# parameter named, each with one constraint of the four kinds, the count and the period inside, under one digest.
+BOUNDS = ('{"operation":"payment.release","target":"urn:example:vendor:7","policy_version":"urn:example:payment-policy:4",'
+          '"input_version_refs":["urn:example:invoice:114#v2"],"parameters":{"amount":{"exact":"1200.00"},'
+          '"currency":{"one_of":["EUR"]},"destination":{"exact":"urn:example:account:vendor-7-main"}},'
+          '"max_requests":3,"valid_from":"2026-10-03T00:00:00Z","valid_until":"2026-12-31T23:59:59Z"}')
 EXPORT_ID = "urn:example:export:issuer-1:2026-09-27"
 
 
@@ -260,11 +266,14 @@ def person_fields(ps, profile=PROFILE, version=VERSION, assertion=None, key_ref=
                         10 approved_spec_digest, 11 signed_at
     person_review       5 decision_id, 6 stage_id, 7 outcome, 8 shown_spec_digest, 9 shown_view_digest (or empty),
                         10 signed_at
+    person_standing_approval  5 decision_id, 6 stage_id, 7 bounds_digest, 8 shown_view_digest (or empty), 9 signed_at
     person_affirmation  5 decision_id, 6 affirmed_digest, 7 signed_at"""
-    kind = assertion or ps["assertion"]
+    kind = ps["assertion"]  # the object's own type gives the fields; assertion, when given, only relabels field 3
     fields = header(ps, profile, version, assertion, key_ref) + [text(ps["decision_id"])]
     if kind == "person_affirmation":
         fields.append(digest(ps["affirmed_digest"]))
+    elif kind == "person_standing_approval":
+        fields += [text(ps["stage_id"]), digest(ps["bounds_digest"]), digest(ps.get("shown_view_digest"))]
     else:
         fields += [text(ps["stage_id"]), text(ps["outcome"]), digest(ps["shown_spec_digest"]),
                    digest(ps.get("shown_view_digest"))]
@@ -373,6 +382,28 @@ def rejected_attachment(spec_digest):
              "core_ref": {"field": "review_log", "index": 0}},
         ],
     }
+
+
+def standing_attachment(spec_digest, view_digest):
+    """Action binding 0.3.0: a review shown the digest of the bounds (and a view), and a standing approval of them by
+    the person shown, for a third record; no request made yet."""
+    bounds_digest = sha256(BOUNDS.encode("utf-8")).hex()
+    return {
+        "profile": "dps-action-binding", "profile_version": "0.3.0", "decision_id": DECISION_C,
+        "action_specifications": [specification(SPECIFICATION)],
+        "stages": [
+            {"stage_id": "v1", "kind": "review", "at": "2026-10-03T09:10:00Z", "reviewer_ref": "owner-example-1",
+             "shown_bounds_digest": bounds_digest, "shown_view_ref": "urn:example:review-view:103-1",
+             "shown_view_digest": view_digest},
+            {"stage_id": "sa1", "kind": "standing_approval", "at": "2026-10-03T09:12:00Z", "review_ref": "v1",
+             "actor_ref": "owner-example-1", "method": "signature",
+             "authority": {"authority_ref": "urn:example:charter:CH-EXAMPLE-1#payables-delegation"},
+             "rationale": {"timing": "contemporaneous", "ai_assisted": False, "recorded_at": "2026-10-03T09:12:00Z",
+                           "text_ref": "urn:example:rationale:103-1"},
+             "bounds_digest": bounds_digest,
+             "bounds": {"availability": "available", "bytes_b64": b64(BOUNDS.encode("utf-8"))}},
+        ],
+    }, bounds_digest
 
 
 # ---------------------------------------------------------------- an organisation's certificate (TEST ONLY)
@@ -618,6 +649,9 @@ def build():
                  "shown_spec_digest": spec_digest, "signed_at": "2026-10-02T09:21:00Z"}
     affirmation_r0 = {"assertion": "person_affirmation", "decision_id": "DR-2099-001", "affirmed_digest": seal["R0"],
                       "signed_at": "2026-09-25T11:00:00Z"}
+    ab_standing, bounds_digest = standing_attachment(spec_digest, view_digest)
+    standing = {"assertion": "person_standing_approval", "decision_id": DECISION_C, "stage_id": "sa1",
+                "bounds_digest": bounds_digest, "shown_view_digest": view_digest, "signed_at": "2026-10-03T09:12:00Z"}
 
     person("approval_a", "person-a-1 approves outcome o1 of DR-2099-101, shown the specification and a view",
            "person-a-1", approval)
@@ -696,6 +730,36 @@ def build():
     person("affirmation_r2_as_stored", "a digest over R2 with its seal value in place, not zeroed", "person-a-1",
            {"assertion": "person_affirmation", "decision_id": "DR-2099-003",
             "affirmed_digest": sha256(stored_r2.encode("utf-8")).hex(), "signed_at": "2026-09-27T10:00:00Z"})
+
+    # A standing approval of bounds (action binding 0.3.0, DR-2099-103): the bounds' digest signed once.
+    person("standing_a", "person-a-1 approves the bounds of DR-2099-103 once (stage sa1), shown their digest and a view",
+           "person-a-1", standing)
+    person("standing_a_bounds_changed", "standing_a signed over the bounds' digest, presented with the specification's "
+           "digest in its place", "person-a-1", standing, presented={"bounds_digest": spec_digest})
+    person("standing_a_view_dropped", "signed with no view digest (the empty field), presented with the review's view "
+           "digest", "person-a-1", dict(standing, shown_view_digest=None), presented={"shown_view_digest": view_digest})
+    person("standing_a_no_view", "signed and presented with no view digest, while the review states one", "person-a-1",
+           {k: x for k, x in standing.items() if k != "shown_view_digest"})
+    person("standing_a_wrong_stage", "names the review stage v1, not the standing approval", "person-a-1",
+           dict(standing, stage_id="v1"))
+    person("standing_a_other_decision", "names DR-2099-101, whose stage sa1 does not exist", "person-a-1",
+           dict(standing, decision_id=DECISION_A))
+    person("standing_a_time_changed", "signed at 09:12:00Z, presented a minute later", "person-a-1", standing,
+           presented={"signed_at": "2026-10-03T09:13:00Z"})
+    person("standing_a_by_org", "org-seal-1, a key in role organisation, signs a person's standing approval",
+           "org-seal-1", standing)
+    person("standing_a_as_approval", "standing_a's signature presented in a person_approval object over DR-2099-101's "
+           "outcome o1: the type is in the signed bytes", "person-a-1", standing,
+           presented={"assertion": "person_approval", "decision_id": DECISION_A, "stage_id": "o1",
+                      "outcome": "approved", "shown_spec_digest": spec_digest, "approved_spec_digest": spec_digest,
+                      "bounds_digest": None})
+    person("approval_a_as_standing", "approval_a's signature presented in a person_standing_approval object over "
+           "DR-2099-103's stage sa1: the type is in the signed bytes", "person-a-1", approval,
+           presented={"assertion": "person_standing_approval", "decision_id": DECISION_C, "stage_id": "sa1",
+                      "bounds_digest": bounds_digest, "outcome": None, "shown_spec_digest": None,
+                      "approved_spec_digest": None})
+    passkey("standing_passkey", "person-a-passkey-1 approves the bounds of DR-2099-103 with a passkey, user present and "
+            "verified", "person-a-passkey-1", dict(standing, signed_at="2026-10-03T09:12:30Z"))
 
     passkey_approval = dict(approval, signed_at="2026-10-01T09:12:30Z")
     passkey("approval_passkey", "person-a-passkey-1 (WebAuthn, ES256) approves o1, user present and verified",
@@ -1059,7 +1123,7 @@ def build():
         return {"assertion": "timestamp", "subject": subject, "hash_algorithm": "SHA-256", "tsa_ref": tsa_ref,
                 "token_b64": tokens[token_name]["token_b64"]}
 
-    base_persons = ["approval_a", "approval_passkey", "review_b0", "affirmation_r0", "approval_a2"]
+    base_persons = ["approval_a", "approval_passkey", "review_b0", "affirmation_r0", "approval_a2", "standing_a"]
     base_seals = ["seal_attachment", "seal_record_r0", "seal_export"]
     attachment = {
         "profile": PROFILE,
@@ -1084,8 +1148,8 @@ def build():
              "value_b64": subject_of(persons, "approval_a2")["value_b64"]}, "sig_approval_a2_before"),
         "sig_approval_a2_rsa": timestamp(subject_of(persons, "approval_a2"), "sig_approval_a2_rsa", RSA_TSA_REF),
     }
-    action_binding = {DECISION_A: ab_approved, DECISION_B: ab_rejected}
-    context = {"export": "full", "action_binding": [DECISION_A, DECISION_B]}
+    action_binding = {DECISION_A: ab_approved, DECISION_B: ab_rejected, DECISION_C: ab_standing}
+    context = {"export": "full", "action_binding": [DECISION_A, DECISION_B, DECISION_C]}
 
     def person_result(i, name, at, identity_holder, basis="stated_time", timestamp_index=None, revocation=None,
                       extra=None, authenticator=None, checked_against="action_binding_attachment"):
@@ -1141,7 +1205,7 @@ def build():
         "trust_policy": {"status": "verified"},
         "attachment_digest": sha256(compact(attachment)).hex(),
         "documents": documents,
-        "person_signature_count": 5,
+        "person_signature_count": 6,
         "person_signatures": [
             person_result(0, "approval_a", "2026-10-01T09:12:00Z", "owner-example-1"),
             person_result(1, "approval_passkey", "2026-10-01T09:12:30Z", "owner-example-1",
@@ -1151,6 +1215,7 @@ def build():
                           extra={"covers_affirmation_record": True}, checked_against="export_entry"),
             person_result(4, "approval_a2", "2026-10-01T09:15:00Z", "owner-example-1", basis="independent_timestamp",
                           timestamp_index=0, revocation="compromised"),
+            person_result(5, "standing_a", "2026-10-03T09:12:00Z", "owner-example-1"),
         ],
         "organisation_seal_count": 3,
         "organisation_seals": [
@@ -1198,6 +1263,7 @@ def build():
         "exports": exports,
         "specification": {"text": SPECIFICATION, "spec_digest": spec_digest},
         "view": {"text": VIEW, "digest": view_digest},
+        "bounds": {"text": BOUNDS, "digest": bounds_digest},
         "action_binding_attachments": action_binding,
         "escaped_copy": escaped_copy,
         "duplicate_member": duplicate_member,

@@ -47,10 +47,11 @@
       "else": {"not": {"anyOf": [{"required": ["authenticator_data_b64"]}, {"required": ["client_data_json_b64"]}]}}
     },
     "person_signature": {
-      "description": "The person's own signature over what they decided. One of three assertion types, each with one fixed field order under the shared rule: person_approval and person_review for an outcome recorded under action binding, person_affirmation for a Core record that has no action binding.",
+      "description": "The person's own signature over what they decided. One of four assertion types, each with one fixed field order under the shared rule: person_approval and person_review for an outcome recorded under action binding, person_standing_approval for a standing approval of bounds recorded there, person_affirmation for a Core record that has no action binding.",
       "oneOf": [
         {"$ref": "#/$defs/person_approval"},
         {"$ref": "#/$defs/person_review"},
+        {"$ref": "#/$defs/person_standing_approval"},
         {"$ref": "#/$defs/person_affirmation"}
       ]
     },
@@ -88,6 +89,23 @@
         "shown_spec_digest": {"$ref": "#/$defs/sha256_hex"},
         "shown_view_digest": {"$ref": "#/$defs/sha256_hex"},
         "signed_at": {"$ref": "#/$defs/time"},
+        "signature": {"$ref": "#/$defs/signature"}
+      }
+    },
+    "person_standing_approval": {
+      "description": "A standing approval, recorded under action binding 0.3.0: the standing_approval stage and the digest of the bounds the person approved, which is the digest the review was shown and the stage carries. The count of requests and the period are inside the bounds, under that digest, so they are not fields. Signing it shows that the holder of the key approved these bounds once; nothing about any request made under them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "profile_version", "assertion", "decision_id", "stage_id", "bounds_digest", "signed_at", "signature"],
+      "properties": {
+        "profile": {"const": "dps-signatures"},
+        "profile_version": {"const": "0.2.0"},
+        "assertion": {"const": "person_standing_approval"},
+        "decision_id": {"$ref": "#/$defs/decision_id"},
+        "stage_id": {"$ref": "#/$defs/stage_id", "description": "The standing_approval stage, in the action-binding attachment of this record."},
+        "bounds_digest": {"$ref": "#/$defs/sha256_hex", "description": "The digest of the bounds' exact bytes, as the stage carries it and the review was shown it."},
+        "shown_view_digest": {"$ref": "#/$defs/sha256_hex", "description": "The review's view digest, when it states one. Absent, the field is signed as the empty byte string."},
+        "signed_at": {"$ref": "#/$defs/time", "description": "The time the signer states. It is signed, and it is the signer's statement, not independent time."},
         "signature": {"$ref": "#/$defs/signature"}
       }
     },
