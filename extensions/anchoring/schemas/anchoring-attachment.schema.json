@@ -109,7 +109,7 @@
           "properties": {
             "kind": {"const": "signature"},
             "of": {
-              "description": "The signed object whose signature value this is: a checkpoint of this profile, by its key reference, chain and count; or an assertion of the signatures profile, named as that profile names it (its assertion type, its key reference and what it names: the decision_id, and for an outcome its stage_id, or what a seal seals). profile, when given, names the signatures profile.",
+              "description": "The signed object whose signature value this is: a checkpoint of this profile, by its key reference, chain and count; or an assertion of the signatures profile, named as that profile names it (its assertion type, its key reference and what it names: the decision_id, and for an outcome or a standing approval its stage_id, or what a seal seals). profile, when given, names the signatures profile.",
               "oneOf": [
                 {
                   "type": "object",
@@ -128,7 +128,7 @@
                   "required": ["assertion", "key_ref", "decision_id"],
                   "properties": {
                     "profile": {"const": "dps-signatures"},
-                    "assertion": {"enum": ["person_approval", "person_review"]},
+                    "assertion": {"enum": ["person_approval", "person_review", "person_standing_approval"]},
                     "key_ref": {"$ref": "#/$defs/ref"},
                     "decision_id": {"$ref": "#/$defs/decision_id"},
                     "stage_id": {"$ref": "#/$defs/stage_id"}
