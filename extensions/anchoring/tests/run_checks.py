@@ -1646,6 +1646,11 @@ def read_with_documents(report, ctx):
             want = ref[dim] if dim == "status" else ref[dim]["status"]
             if got == "verified" and want != "verified":
                 problems.append(f"checkpoint {i}: {dim} reported verified, but the reference check finds {want}")
+        # A verified signature or key state names the key the check verified with, as a receipt names its service key.
+        for dim in ("signature", "key_state"):
+            if r[dim]["status"] == ref[dim]["status"] == "verified" and r[dim].get("key_ref") != ref[dim].get("key_ref"):
+                problems.append(f"checkpoint {i}: the {dim.replace('_', ' ')}'s key_ref is not the key the signature "
+                                f"verified with")
         ks, rks = r["key_state"], ref["key_state"]
         if ks["status"] == rks["status"] == "verified" and any(
                 ks.get(k) != rks.get(k) for k in ("time_basis", "time", "timestamp_index", "revocation_reason")):
@@ -1885,9 +1890,19 @@ def vector_case(c, v):
             bad.append(c["key"])
     elif kind == "scitt_cbor":
         # The strict reader against cbor2, pinned: on every statement, receipt and proof it reads, the two agree and
-        # cbor2 writes the same bytes back; on the ones it refuses, it says why, where cbor2 reads some of them.
+        # cbor2 writes the same bytes back; on the ones it refuses, it says why. cbor2.loads returns a value for each
+        # refused one; the case says how many bytes it leaves unread (st_a_trailing: one, the byte after the item).
         import cbor2
+        import io
         refused = {}
+        for name in c["refused"]:
+            raw = base64.b64decode(pointer_get(v["scitt"]["statements"], "/" + name))
+            cbor2.loads(raw)  # returns a value; raising here fails the case
+            decoder = cbor2.CBORDecoder(io.BytesIO(raw))
+            decoder.decode()
+            left, want = len(raw) - decoder.fp.tell(), c.get("cbor2_unread", {}).get(name, 0)
+            if left != want:
+                bad.append(f"{name}: cbor2 leaves {left} byte(s) unread, not {want}")
         for name, st in v["scitt"]["statements"].items():
             for member in ("statement_b64", "receipt_b64"):
                 if member not in st:
