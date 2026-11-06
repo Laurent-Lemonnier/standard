@@ -131,6 +131,8 @@ Added as agreed on #69, still in 0.2.0. A timestamp in the attachment MAY be an 
 
 The proof is verified only when its five checks are (`proof`, `subject_bytes`, `operations`, `attestation`, `header`). It needs no package beyond SHA-256, and the check contacts no calendar.
 
+Deployments that need Bitcoin chain validation and a confirmation-depth rule may apply the additional requirements in [VERIFY-ANCHOR, draft-fassbender-scitt-time-anchor-08, Section 4.1](https://www.ietf.org/archive/id/draft-fassbender-scitt-time-anchor-08.html#section-4.1). This extension's reference check does not perform those checks, and its verified result does not claim conformance to that profile.
+
 ## An independent checkpoint
 
 - **What it fixes.** A chain at one point: its identifier (`chain_id`), the number of entries (`count`), the last link (`head_link`, which is `link(count - 1)`), and the time (`checkpoint_time`). The count and the last link are the shape portable verification already uses.
