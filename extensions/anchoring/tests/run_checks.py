@@ -1260,13 +1260,20 @@ def check_ots(ts, policy, out, subject_check, value, headers):
                 # Several Bitcoin attestations: the lowest block the verifier holds a matching header for is reported.
                 height, _, _, hdr = good[0]
                 checks["header"] = "verified"
-                out["block"] = {"height": height, "hash_hex": sha256(sha256(hdr))[::-1].hex(),
-                                "header_source_ref": held["source_ref"]}
-                out["miner_stated_time"] = iso(datetime.fromtimestamp(int.from_bytes(hdr[68:72], "little"),
-                                                                      tz=timezone.utc))
-                findings.append(f"the subject's bytes existed before block {height} was mined; its header's time is "
-                                "the miner's statement, not a time they existed by; the header is only as good as "
-                                f"{held['source_ref']}, and this check does not test proof of work")
+                # A block in a report means the whole timestamp was verified (#101): only then are the subject's
+                # bytes the ones the proof starts from, and the block is about the subject.
+                if checks["subject_bytes"] == "verified":
+                    out["block"] = {"height": height, "hash_hex": sha256(sha256(hdr))[::-1].hex(),
+                                    "header_source_ref": held["source_ref"]}
+                    out["miner_stated_time"] = iso(datetime.fromtimestamp(int.from_bytes(hdr[68:72], "little"),
+                                                                          tz=timezone.utc))
+                    findings.append(f"the subject's bytes existed before block {height} was mined; its header's time "
+                                    "is the miner's statement, not a time they existed by; the header is only as good "
+                                    f"as {held['source_ref']}, and this check does not test proof of work")
+                elif checks["subject_bytes"] == "not_checked":
+                    findings.append(f"the bytes this subject carries reach block {height}, whose header comes from "
+                                    f"{held['source_ref']}; they are not checked as what the subject names, so no "
+                                    "block is reported; this check does not test proof of work")
             elif any(r[1] == "failed" for r in results):
                 checks["header"] = "failed"
                 for height, status, msg, hdr in results:
