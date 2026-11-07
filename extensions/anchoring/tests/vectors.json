@@ -3414,6 +3414,34 @@
           "proof_b64": "AE9wZW5UaW1lc3RhbXBzAABQcm9vZgC/ieLohOiSlAEI1lpHvcd/+mRCcFWeLmXGj7w7EzQwlsxdnd/+nvnacBn/CAAFiJYNc9cZAQOB6jAIAAWIlg1z1xkBA4LqMA=="
         }
       },
+      "seal_r0_empty_append": {
+        "about": "R0's seal with an empty append argument before its path to block 800001",
+        "timestamp": {
+          "assertion": "timestamp",
+          "subject": {
+            "kind": "seal",
+            "decision_id": "DR-2099-001",
+            "value_hex": "4671e381366fcdad7f6e2951619fa16622d826a4bbe0dd8b505692bd17cf5327"
+          },
+          "hash_algorithm": "SHA-256",
+          "format": "opentimestamps",
+          "proof_b64": "AE9wZW5UaW1lc3RhbXBzAABQcm9vZgC/ieLohOiSlAEI1lpHvcd/+mRCcFWeLmXGj7w7EzQwlsxdnd/+nvnacBnwAPEQhLAcxep7SPAO4QNJgi5xTwjwIBNCS8X2dpl+mvJbEdgVlOtIBeI985DcmnIz6IZSs40CCAAFiJYNc9cZAQOB6jA="
+        }
+      },
+      "seal_r0_empty_prepend": {
+        "about": "R0's seal with an empty prepend argument before its path to block 800001",
+        "timestamp": {
+          "assertion": "timestamp",
+          "subject": {
+            "kind": "seal",
+            "decision_id": "DR-2099-001",
+            "value_hex": "4671e381366fcdad7f6e2951619fa16622d826a4bbe0dd8b505692bd17cf5327"
+          },
+          "hash_algorithm": "SHA-256",
+          "format": "opentimestamps",
+          "proof_b64": "AE9wZW5UaW1lc3RhbXBzAABQcm9vZgC/ieLohOiSlAEI1lpHvcd/+mRCcFWeLmXGj7w7EzQwlsxdnd/+nvnacBnxAPEQhLAcxep7SPAO4QNJgi5xTwjwIBNCS8X2dpl+mvJbEdgVlOtIBeI985DcmnIz6IZSs40CCAAFiJYNc9cZAQOB6jA="
+        }
+      },
       "seal_r1_as_r0": {
         "about": "a proof from the SHA-256 of R1's seal, presented for R0's seal",
         "timestamp": {

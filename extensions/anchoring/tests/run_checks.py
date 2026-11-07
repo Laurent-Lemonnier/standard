@@ -1120,6 +1120,10 @@ def ots_read(raw):
             if tag not in (OTS_SHA256, OTS_APPEND, OTS_PREPEND):
                 raise NotOts(f"an unknown operation tag {tag:#04x}")
             arg = varbytes(OTS_MAX_ARG, "an argument") if tag != OTS_SHA256 else b""
+            if tag != OTS_SHA256 and not arg:
+                # The reference library refuses an empty append or prepend argument, writing and reading: it leaves
+                # the message as it was, so accepting it would let one proof be written in more than one way.
+                raise NotOts(f"an empty {'append' if tag == OTS_APPEND else 'prepend'} argument")
             if (tag, arg) in out["ops"]:
                 raise NotOts("the same operation twice at one point")
             result = 32 if tag == OTS_SHA256 else length + len(arg)
