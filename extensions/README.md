@@ -30,3 +30,5 @@ In the terms of draft-mih-sokolov-scitt-payload-binding-06, both names are `as-t
 
 How a reference is carried in another format, its member names and its purpose values, is that format's matter and is not defined here. A reference that verifies shows only that the cited bytes have the digest it carries. It does not show that they are a decision record or an attachment, which one they are, or anything they state: that is for the document's own check, which reports it.
 
+A reference is a digest of the whole document. The people the document names are in its bytes in clear, and the digest is not a hiding commitment to any of them: anyone who can rebuild the rest of the bytes can test a guessed name against it, and one digest links every place it appears.
+
