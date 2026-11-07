@@ -1294,14 +1294,19 @@ def build():
             "time": "2026-09-29T12:00:00Z"}),
     }
     # st_a carried beside the export, as a verifier reports it: cp_a's result, with the statement's format, its
-    # receipt (service-s-1, leaf 1 of 5) and the log's consistency not checked.
+    # receipt (service-s-1, leaf 1 of 5) and the log's consistency not checked. The signature and the key state name
+    # the key that signed the statement, witness-a-scitt-1 (its kid), not witness-a-1, which signed cp_a under the
+    # shared rule (F01 of Andrii Sparysh's reading, Palimpsests docs/interop/dps-reading-2).
     beside_results["st_a"] = {**copy.deepcopy(beside_results["cp_a"]), "format": "scitt", "attachment_index": 0,
                               "receipt": {"status": "verified", "service_key_ref": "service-s-1", "tree_size": 5,
                                           "leaf_index": 1},
                               "log_consistency": {"status": "not_checked"}}
+    for member in ("signature", "key_state"):
+        beside_results["st_a"][member]["key_ref"] = scitt["statements"]["st_a"]["signed_with"]
     beside_results["about"] += (" st_a is cp_a's statement carried beside the export with its receipt, as a verifier "
-                                "reports it: format scitt, the receipt verified (service-s-1, leaf 1 of 5), the log's "
-                                "consistency not checked.")
+                                "reports it: format scitt, the signature and the key state under witness-a-scitt-1, "
+                                "the key that signed the statement, the receipt verified (service-s-1, leaf 1 of 5), "
+                                "the log's consistency not checked.")
     # An attachment carrying cp_a with its count written twice, 5 first and 3 last: a reader keeping the last member
     # reads cp_a, whose signature verifies; one keeping the first reads a checkpoint of five entries, whose does not.
     carrying = {"profile": PROFILE, "profile_version": VERSION, "chain_id": CHAIN,
