@@ -1254,6 +1254,12 @@ def build():
     ots("seal_r0_same_operation_twice", "R0's seal with sha256 written twice at one point", subj_r0,
         ots_proof(d_r0, ots_tree([("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800001))]),
                                   ("op", 0x08, b"", [("att", OTS_BITCOIN, ots_varuint(800002))])])))
+    # An append or prepend with an empty argument leaves the message as it was, so R0's path still reaches block
+    # 800001; the reference library refuses it, writing and reading, so that one proof has one serialisation.
+    for op in ("append", "prepend"):
+        items, _ = ots_path(d_r0, [(op, b"")] + steps, bitcoin(800001))
+        ots(f"seal_r0_empty_{op}", f"R0's seal with an empty {op} argument before its path to block 800001", subj_r0,
+            ots_proof(d_r0, ots_tree(items)))
     d_r1 = sha256(value_of[id(subj_r1)])
     items, root = ots_path(d_r1, steps, bitcoin(800005))
     block(800005, root, "2026-09-27T17:00:00Z")
