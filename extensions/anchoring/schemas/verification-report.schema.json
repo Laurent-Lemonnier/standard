@@ -117,13 +117,13 @@
       "properties": {
         "status": {"$ref": "#/$defs/status"},
         "service_key_ref": {"$ref": "#/$defs/ref", "description": "The service key (role transparency_service) that signed the receipt, by its kid."},
-        "tree_size": {"type": "integer", "minimum": 1, "description": "The size of the log the receipt attests the statement in."},
-        "leaf_index": {"type": "integer", "minimum": 0, "description": "The statement's leaf, counted from 0."},
+        "tree_size": {"type": "integer", "minimum": 1, "description": "The tree size the inclusion proof states. The receipt's signature does not cover it: the same path can reach the same root under other sizes."},
+        "leaf_index": {"type": "integer", "minimum": 0, "description": "The statement's leaf index the inclusion proof states, counted from 0. The receipt's signature does not cover it: under another tree size, the same path can reach the same root with another index."},
         "findings": {"$ref": "#/$defs/findings"}
       },
       "if": {"properties": {"status": {"const": "verified"}}, "required": ["status"]},
       "then": {"required": ["service_key_ref", "tree_size", "leaf_index"]},
-      "description": "The service's receipt (RFC 9942) for a signed statement. verified means exactly: the service key named signed that this statement is in its log at tree_size. Not that the log is append-only, nor that it showed everyone the same log, nor when the statement was registered: a receipt states no time. unavailable: a receipt by a revoked service key, which cannot be shown made before the revocation, or no receipt held."
+      "description": "The service's receipt (RFC 9942) for a signed statement. verified means exactly: the service key named signed a root of its log, and this statement's bytes lead to that root by the proof's path. tree_size and leaf_index are what the proof states: the signature does not cover them, and the same path can reach the same root under other sizes and, with them, other indexes. Not that the log is append-only, nor that it showed everyone the same log, nor when the statement was registered: a receipt states no time. unavailable: a receipt by a revoked service key, which cannot be shown made before the revocation, or no receipt held."
     },
     "sha256_hex": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "ref": {"type": "string", "minLength": 1, "maxLength": 256},

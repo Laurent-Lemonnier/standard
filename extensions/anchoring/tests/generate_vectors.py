@@ -1002,6 +1002,15 @@ def build():
     receipt("st_a_receipt_one_leaf", "st_a", "st_a with a proof [1, 1, []] and a receipt signed over st_a's own leaf "
             "hash, the root of a one-leaf log: a leaf index equal to the tree size, with a path that otherwise fits",
             "service-s-1", proof=[1, 1, []], signed_root=leaf_hash(base64.b64decode(statements["st_a"]["statement_b64"])))
+    # The proof's tree size and leaf index are outside the receipt's signature, which covers the root and the protected
+    # header (RFC 9942): with only the numbers edited, the same path reaches the same root, and the signature is the
+    # same bytes (#109).
+    receipt("st_a_receipt_size_8", "st_a", "st_a with its receipt's proof stating tree size 8 in place of 5, the path "
+            "and the signature unchanged: the path still reaches the root the service signed", "service-s-1",
+            proof=[8, 1, inclusion_path(leaf_hashes, 1)])
+    receipt("st_a_count_4_receipt_leaf_1_of_2", "st_a_count_4", "st_a_count_4 with its receipt's proof stating leaf 1 "
+            "of 2 in place of leaf 4 of 5, the path and the signature unchanged: the path still reaches the root the "
+            "service signed", "service-s-1", proof=[2, 1, inclusion_path(leaf_hashes, 4)])
     # Payloads stating a checkpoint_time in another form than the one signed as text: signed by witness-a-scitt-1 over
     # cp_a's other fields. The checkpoint schema refuses these times, so the check fails the signature.
     for name, other_time in (("st_a_time_offset", "2026-09-27T17:00:00+05:00"),

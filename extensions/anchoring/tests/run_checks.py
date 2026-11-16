@@ -963,9 +963,11 @@ def root_from_path(leaf, index, size, path):
 
 
 def check_receipt(info, policy, allowed, where):
-    """The service's receipt (RFC 9942) for a statement: verified means exactly that the service signed that this
-    statement is in its log at the tree size named. allowed: the service keys the policy lists for the source (or,
-    beside the export, for a SCITT source of the chain). No time: a receipt states none."""
+    """The service's receipt (RFC 9942) for a statement: verified means exactly that the service key named signed a
+    root of its log, and that this statement's bytes lead to that root by the proof's path. The tree size and the leaf
+    index are reported as the proof states them: the signature does not cover them, and the same path can reach the
+    same root under other sizes and, with them, other indexes. allowed: the service keys the policy lists for the
+    source (or, beside the export, for a SCITT source of the chain). No time: a receipt states none."""
     if info["receipt_raw"] is None:
         return {"status": "unavailable", "findings": ["no receipt held: the service's registration of this statement "
                                                       "is not shown"]}
@@ -1033,10 +1035,12 @@ def check_receipt(info, policy, allowed, where):
                                                                 "a receipt states no time, so it cannot be shown made "
                                                                 "before that"])
         return out
-    out.update(status="verified", findings=deprecated + [f"{kid} signed that this statement is in its log at tree size {size} "
-                                            f"(leaf {index}); not that the log is append-only, nor that it showed "
-                                            "everyone the same log; a receipt states no registration time, and the "
-                                            "log's order need not be the order of issuance"])
+    out.update(status="verified", findings=deprecated + [f"{kid} signed a root of its log, and this statement's bytes "
+                                            "lead to that root by the proof's path; the proof states tree size "
+                                            f"{size} and leaf {index}, which the signature does not cover; not that "
+                                            "the log is append-only, nor that it showed everyone the same log; a "
+                                            "receipt states no registration time, and the log's order need not be "
+                                            "the order of issuance"])
     return out
 
 
